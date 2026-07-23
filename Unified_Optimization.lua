@@ -27,8 +27,35 @@ local Settings = {
         OptimizeMap = true,       -- Удалить тяжелые текстуры и упростить материалы карты
         DisableParticles = true,  -- Выключить тяжелые эффекты частиц и следы (Trails)
     },
+    Lighting = {
+        Enabled = true,
+        Fullbright = true,        -- Максимальная яркость (Fullbright)
+        RemoveAtmosphere = true,  -- Полное удаление тумана/атмосферы для 100% видимости
+        ContrastPreserve = true,  -- Сохранение контраста: в замкнутых пространствах стены не будут сливаться!
+    },
     Screen = {
         StretchedResolution = 0.65, -- "Растянутый экран" (камера-трюк). 0.65 = шире/больше FPS, 1.0 = выключено
+    },
+    CameraComfort = {
+        ZeroCamShake = true,      -- Полное отключение тряски камеры (Zero Cam Shake)
+        ShiftLockEnabled = true,  -- Кастомный Shoulder ShiftLock
+        ShiftLockKey = Enum.KeyCode.L, -- Клавиша переключения ShiftLock (по умолчанию 'L')
+    },
+    Crosshair = {
+        Enabled = true,
+        VerticalOffset = -20,     -- Смещение прицела вверх от центра (Raised Crosshair)
+        Size = 10,                -- Размер линий прицела
+        Gap = 4,                  -- Зазор по центру
+        Color = Color3.fromRGB(0, 255, 200),
+    },
+    JumpRadius = {
+        Enabled = true,
+        Color = Color3.fromRGB(255, 170, 0), -- Круг предела прыжка (Jump Distance Radius)
+    },
+    CharacterGlow = {
+        Enabled = true,
+        Transparency = 0.85,      -- Прозрачный персонаж
+        AuraColor = Color3.fromRGB(0, 255, 255), -- Цвет светящейся ауры-сферы
     },
     Prediction = {
         Enabled = true,
@@ -54,6 +81,17 @@ local Settings = {
         Color = Color3.fromRGB(150, 255, 200),     -- Мягкий мятный цвет призрака
         Strength = 1.0,                            -- Множитель силы предсказания пинга
         MaxLimbDistance = 6,                       -- Максимальный разброс конечностей призрака
+    },
+    Gyroscope = {
+        Enabled = true,                            -- Физический, супер-плавный 5-столпный гироскоп
+        PitchSensitivity = 1.2,                    -- Чувствительность по вертикали
+        YawSensitivity = 1.5,                      -- Чувствительность по горизонтали
+        Deadzone = 0.005,                          -- Мертвая зона для компенсации дрейфа нуля
+        AlphaMin = 0.1,                            -- Максимальное сглаживание микротремора
+        AlphaMax = 0.9,                            -- Быстрый разворот (сглаживание отключается)
+        AlphaSpeedCoeff = 8.0,                     -- Насколько быстро сглаживание уступает место скорости
+        AccelFactor = 1.5,                         -- Сила нелинейного ускорения поворота
+        AccelLimit = 2.5,                          -- Лимит нелинейного ускорения
     }
 }
 
@@ -117,6 +155,9 @@ function SharedState.Cleanup()
             pcall(function() obj:Destroy() end)
         end
     end
+    -- Сброс игрока к стандарту по коллизии камеры
+    pcall(function() player.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Zoom end)
+
     SharedState.Connections = {}
     SharedState.Drawings = {}
     SharedState.Instances = {}
@@ -518,8 +559,52 @@ local function InitFFlags()
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
--- ║        2. МОДУЛЬ: СТРЕТЧ И АНТИЛАГ КАРТЫ (OPTIMIZER)     ║
--- ╚══════════════════════════════════════════════════════════╗
+-- ║         2. МОДУЛЬ: СВЕТ (FULLBRIGHT С КОНТРАСТОМ)        ║
+-- ╚══════════════════════════════════════════════════════════╝
+local function InitLightingOptimizer()
+    if not Settings.Lighting.Enabled then return end
+
+    local function UpdateLighting()
+        pcall(function()
+            local Lighting = game:GetService("Lighting")
+            if Settings.Lighting.Fullbright then
+                Lighting.Brightness = 2
+                Lighting.ClockTime = 14
+                Lighting.GlobalShadows = not Settings.Lighting.ContrastPreserve -- Выключаем тени только если не нужен контраст
+
+                if Settings.Lighting.ContrastPreserve then
+                    -- Мягкий рассеянный свет с сохранением глубины теней
+                    Lighting.Ambient = Color3.fromRGB(130, 130, 140)
+                    Lighting.OutdoorAmbient = Color3.fromRGB(150, 150, 160)
+                else
+                    Lighting.Ambient = Color3.fromRGB(255, 255, 255)
+                    Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+                end
+            end
+            if Settings.Lighting.RemoveAtmosphere then
+                for _, obj in ipairs(Lighting:GetChildren()) do
+                    if obj:IsA("Atmosphere") or obj:IsA("Sky") or obj:IsA("Clouds") then
+                        obj:Destroy()
+                    end
+                end
+                Lighting.FogEnd = 999999
+            end
+        end)
+    end
+
+    UpdateLighting()
+    local conn = game:GetService("Lighting").ChildAdded:Connect(function(child)
+        task.wait(0.1)
+        UpdateLighting()
+    end)
+    SharedState.AddConnection(conn)
+
+    ShowNotification("Свечение", "Fullbright & Atmosphere Cleaner запущен. Видимость 100%.", 4)
+end
+
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║        3. МОДУЛЬ: СТРЕТЧ И АНТИЛАГ КАРТЫ (OPTIMIZER)     ║
+-- ╚══════════════════════════════════════════════════════════╝
 local function InitOptimizerAndStretch()
     -- Удаление и сброс материалов на карте
     if Settings.Performance.OptimizeMap then
@@ -566,7 +651,240 @@ local function InitOptimizerAndStretch()
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
--- ║         3. МОДУЛЬ: ПРЕДСКАЗАНИЕ ДВИЖЕНИЯ (PREDICTION)    ║
+-- ║        4. МОДУЛЬ: КАМЕРА (КОМФОРТ, SHIFT-SHIFT, БОББИНГ)  ║
+-- ╚══════════════════════════════════════════════════════════╝
+-- Zero Cam Shake (Отключение тряски)
+local function InitZeroCamShake()
+    if not Settings.CameraComfort.ZeroCamShake then return end
+
+    local conn = RunService.RenderStepped:Connect(function()
+        local char = player.Character
+        if char then
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hum.CameraOffset = Vector3.new(0, 0, 0)
+            end
+        end
+    end)
+    SharedState.AddConnection(conn)
+end
+
+-- Custom ShiftLock / Shoulder Shift (Смена плеча камеры)
+local function InitShiftLock()
+    if not Settings.CameraComfort.ShiftLockEnabled then return end
+
+    local UserInputService = game:GetService("UserInputService")
+    local shiftLockActive = false
+    local shiftOffset = Vector3.new(2, 0.5, 0) -- Смещение плеча
+
+    local inputConn = UserInputService.InputBegan:Connect(function(input, processed)
+        if processed then return end
+        if input.KeyCode == Settings.CameraComfort.ShiftLockKey then
+            shiftLockActive = not shiftLockActive
+            UserInputService.MouseBehavior = shiftLockActive and Enum.MouseBehavior.LockCenter or Enum.MouseBehavior.Default
+            ShowNotification("ShiftLock", "Кастомный ShiftLock: " .. (shiftLockActive and "ВКЛ" or "ВЫКЛ"), 2)
+        end
+    end)
+    SharedState.AddConnection(inputConn)
+
+    local renderConn = RunService.RenderStepped:Connect(function()
+        if shiftLockActive then
+            UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+            local char = player.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                -- Поворачиваем персонажа в сторону взгляда камеры
+                local camLook = Camera.CFrame.LookVector
+                local flatLook = Vector3.new(camLook.X, 0, camLook.Z).Unit
+                hrp.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + flatLook)
+            end
+            -- Применяем смещение плеча
+            Camera.CFrame = Camera.CFrame * CFrame.new(shiftOffset)
+        end
+    end)
+    SharedState.AddConnection(renderConn)
+end
+
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║         5. МОДУЛЬ: ПРИЦЕЛ (RAISED CROSSHAIR)             ║
+-- ╚══════════════════════════════════════════════════════════╝
+local function InitRaisedCrosshair()
+    if not Settings.Crosshair.Enabled then return end
+
+    local crosshairDot = CreateDrawing("Circle")
+    crosshairDot.Radius = 2
+    crosshairDot.Filled = true
+    crosshairDot.Color = Settings.Crosshair.Color
+    crosshairDot.Visible = true
+
+    local lines = {}
+    for i = 1, 4 do
+        local line = CreateDrawing("Line")
+        line.Color = Settings.Crosshair.Color
+        line.Thickness = 1.5
+        line.Visible = true
+        table.insert(lines, line)
+    end
+
+    local conn = RunService.RenderStepped:Connect(function()
+        local vpSize = Camera.ViewportSize
+        local center = Vector2.new(vpSize.X / 2, vpSize.Y / 2)
+        -- Сдвигаем центр вверх на указанную величину
+        local targetCenter = center + Vector2.new(0, Settings.Crosshair.VerticalOffset)
+
+        crosshairDot.Position = targetCenter
+
+        local size = Settings.Crosshair.Size
+        local gap = Settings.Crosshair.Gap
+
+        -- Top Line
+        lines[1].From = targetCenter - Vector2.new(0, gap)
+        lines[1].To = targetCenter - Vector2.new(0, gap + size)
+
+        -- Bottom Line
+        lines[2].From = targetCenter + Vector2.new(0, gap)
+        lines[2].To = targetCenter + Vector2.new(0, gap + size)
+
+        -- Left Line
+        lines[3].From = targetCenter - Vector2.new(gap, 0)
+        lines[3].To = targetCenter - Vector2.new(gap + size, 0)
+
+        -- Right Line
+        lines[4].From = targetCenter + Vector2.new(gap, 0)
+        lines[4].To = targetCenter + Vector2.new(gap + size, 0)
+    end)
+    SharedState.AddConnection(conn)
+end
+
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║         6. МОДУЛЬ: КРУГ ДИСТАНЦИИ ПРЫЖКА (JUMP RADIUS)   ║
+-- ╚══════════════════════════════════════════════════════════╝
+local function InitJumpDistanceRadius()
+    if not Settings.JumpRadius.Enabled then return end
+
+    local lines = {}
+    local numSegments = 32
+    for i = 1, numSegments do
+        local line = CreateDrawing("Line")
+        line.Color = Settings.JumpRadius.Color
+        line.Thickness = 2
+        line.Transparency = 0.8
+        line.Visible = false
+        table.insert(lines, line)
+    end
+
+    local conn = RunService.RenderStepped:Connect(function()
+        local char = player.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if not hrp or not hum then
+            for _, l in ipairs(lines) do l.Visible = false end
+            return
+        end
+
+        local g = workspace.Gravity
+        local jVelocity = hum.UseJumpPower and hum.JumpPower or math.sqrt(2 * g * hum.JumpHeight)
+        local tAir = (2 * jVelocity) / g
+        local wSpeed = hum.WalkSpeed
+        local radius = wSpeed * tAir
+
+        local points = {}
+        local rayparams = RaycastParams.new()
+        rayparams.FilterDescendantsInstances = {char}
+        rayparams.FilterType = Enum.RaycastFilterType.Exclude
+
+        for i = 1, numSegments do
+            local angle = (i - 1) * (2 * math.pi / numSegments)
+            local offset = Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
+            local targetPos = hrp.Position + offset
+
+            -- Проекция на землю с помощью Raycast
+            local ray = workspace:Raycast(targetPos + Vector3.new(0, 5, 0), Vector3.new(0, -25, 0), rayparams)
+            local groundY = ray and ray.Position.Y or (hrp.Position.Y - 3) -- Запасной вариант
+
+            table.insert(points, Vector3.new(targetPos.X, groundY, targetPos.Z))
+        end
+
+        for i = 1, numSegments do
+            local p1 = points[i]
+            local p2 = points[(i % numSegments) + 1]
+
+            local s1, on1 = Camera:WorldToViewportPoint(p1)
+            local s2, on2 = Camera:WorldToViewportPoint(p2)
+
+            local line = lines[i]
+            if on1 and on2 then
+                line.From = Vector2.new(s1.X, s1.Y)
+                line.To = Vector2.new(s2.X, s2.Y)
+                line.Visible = true
+            else
+                line.Visible = false
+            end
+        end
+    end)
+    SharedState.AddConnection(conn)
+end
+
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║   7. МОДУЛЬ: ПРОЗРАЧНОСТЬ, АУРА И КАМЕРА БЕЗ КОЛЛИЗИИ    ║
+-- ╚══════════════════════════════════════════════════════════╝
+local function InitTransparentAuraNoCollision()
+    if not Settings.CharacterGlow.Enabled then return end
+
+    local function ApplyTransparencyAndAura(char)
+        if not char then return end
+
+        -- Камера без коллизии стен (Invisicam)
+        pcall(function() player.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Invisicam end)
+
+        -- Прозрачность частей
+        for _, child in ipairs(char:GetDescendants()) do
+            if child:IsA("BasePart") or child:IsA("Decal") then
+                child.Transparency = Settings.CharacterGlow.Transparency
+            end
+        end
+
+        -- Создаем светящуюся сферу ауры в HRP
+        local hrp = char:WaitForChild("HumanoidRootPart", 5)
+        if hrp then
+            local aura = Instance.new("Part")
+            aura.Name = "AuraSphere_Client"
+            aura.Shape = Enum.PartType.Ball
+            aura.Size = Vector3.new(3, 3, 3)
+            aura.Material = Enum.Material.Neon
+            aura.Color = Settings.CharacterGlow.AuraColor
+            aura.Transparency = 0.4
+            aura.CanCollide = false
+            aura.Anchored = false
+            aura.Parent = char
+            SharedState.AddInstance(aura)
+
+            local weld = Instance.new("Weld")
+            weld.Part0 = hrp
+            weld.Part1 = aura
+            weld.C0 = CFrame.new()
+            weld.C1 = CFrame.new()
+            weld.Parent = aura
+
+            -- Всегда видимая сквозь стены подсветка
+            local sBox = Instance.new("SelectionBox")
+            sBox.Name = "AuraGlowBox"
+            sBox.Adornee = aura
+            sBox.Color3 = Settings.CharacterGlow.AuraColor
+            sBox.LineThickness = 0.05
+            sBox.Transparency = 0.1
+            sBox.Parent = aura
+            SharedState.AddInstance(sBox)
+        end
+    end
+
+    if player.Character then ApplyTransparencyAndAura(player.Character) end
+    local conn = player.CharacterAdded:Connect(ApplyTransparencyAndAura)
+    SharedState.AddConnection(conn)
+end
+
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║         8. МОДУЛЬ: ПРЕДСКАЗАНИЕ ДВИЖЕНИЯ (PREDICTION)    ║
 -- ╚══════════════════════════════════════════════════════════╝
 local function InitPrediction()
     if not Settings.Prediction.Enabled then return end
@@ -952,7 +1270,7 @@ local function InitPrediction()
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
--- ║        4. МОДУЛЬ: ПОДСВЕТКА ИНТЕРАКТИВОВ (SMART GLOW)    ║
+-- ║        9. МОДУЛЬ: ПОДСВЕТКА ИНТЕРАКТИВОВ (SMART GLOW)    ║
 -- ╚══════════════════════════════════════════════════════════╝
 local function InitSmartGlow()
     if not Settings.SmartGlow.Enabled then return end
@@ -1027,7 +1345,7 @@ local function InitSmartGlow()
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
--- ║         5. МОДУЛЬ: СЕРВЕРНЫЙ ПРИЗРАК ПИНГА (SERVER POS)   ║
+-- ║         10. МОДУЛЬ: СЕРВЕРНЫЙ ПРИЗРАК ПИНГА (SERVER POS)  ║
 -- ╚══════════════════════════════════════════════════════════╝
 local function InitServerGhost()
     if not Settings.ServerGhost.Enabled then return end
@@ -1198,15 +1516,92 @@ local function InitServerGhost()
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
+-- ║         11. МОДУЛЬ: ВЫСОКОКЛАССНЫЙ ГИРОСКОП (GYROSCOPE)  ║
+-- ╚══════════════════════════════════════════════════════════╝
+local function InitAdvancedGyroscope()
+    if not Settings.Gyroscope.Enabled then return end
+
+    local UserInputService = game:GetService("UserInputService")
+    if not UserInputService.GyroscopeEnabled then
+        -- Попытка принудительно включить датчик гироскопа
+        pcall(function() UserInputService.GyroscopeEnabled = true end)
+    end
+
+    if not UserInputService.GyroscopeEnabled then
+        ShowNotification("Гироскоп", "Датчик гироскопа не поддерживается на вашем девайсе.", 5)
+        return
+    end
+
+    local sPrevPitch = 0
+    local sPrevYaw = 0
+
+    local conn = RunService.RenderStepped:Connect(function(dt)
+        local rotRate, rotSuccess = pcall(function() return UserInputService:GetDeviceRotationRate() end)
+        if not rotSuccess or not rotRate then return end
+
+        -- Сырые данные с датчиков вращения (Pitch & Yaw)
+        local rawPitch = rotRate.X
+        local rawYaw = rotRate.Y
+
+        -- 1. Физическая Мертвая Зона (Deadzone) & Компенсация дрейфа нуля
+        local pitchMag = math.abs(rawPitch)
+        local yawMag = math.abs(rawYaw)
+
+        if pitchMag < Settings.Gyroscope.Deadzone then rawPitch = 0 end
+        if yawMag < Settings.Gyroscope.Deadzone then rawYaw = 0 end
+
+        -- 2. Динамический Коэффициент Alpha (Адаптивное сглаживание микротремора)
+        local alphaPitch = Settings.Gyroscope.AlphaMin + (Settings.Gyroscope.AlphaMax - Settings.Gyroscope.AlphaMin) * (1 - math.exp(-Settings.Gyroscope.AlphaSpeedCoeff * pitchMag * pitchMag))
+        local sFilteredPitch = alphaPitch * rawPitch + (1 - alphaPitch) * sPrevPitch
+        sPrevPitch = sFilteredPitch
+
+        local alphaYaw = Settings.Gyroscope.AlphaMin + (Settings.Gyroscope.AlphaMax - Settings.Gyroscope.AlphaMin) * (1 - math.exp(-Settings.Gyroscope.AlphaSpeedCoeff * yawMag * yawMag))
+        local sFilteredYaw = alphaYaw * rawYaw + (1 - alphaYaw) * sPrevYaw
+        sPrevYaw = sFilteredYaw
+
+        -- 3. Нелинейное ускорение (Acceleration Curve)
+        local speedPitch = math.abs(sFilteredPitch)
+        local accelPitch = 1 + (Settings.Gyroscope.AccelFactor * speedPitch * speedPitch) / (1 + (speedPitch / Settings.Gyroscope.AccelLimit) * (speedPitch / Settings.Gyroscope.AccelLimit))
+
+        local speedYaw = math.abs(sFilteredYaw)
+        local accelYaw = 1 + (Settings.Gyroscope.AccelFactor * speedYaw * speedYaw) / (1 + (speedYaw / Settings.Gyroscope.AccelLimit) * (speedYaw / Settings.Gyroscope.AccelLimit))
+
+        -- 4. Применение раздельной чувствительности (Pitch & Yaw Separation)
+        local finalPitch = sFilteredPitch * Settings.Gyroscope.PitchSensitivity * accelPitch * dt
+        local finalYaw = sFilteredYaw * Settings.Gyroscope.YawSensitivity * accelYaw * dt
+
+        -- 5. Поворот камеры (Без заваливания горизонта)
+        if math.abs(finalPitch) > 0.0001 or math.abs(finalYaw) > 0.0001 then
+            pcall(function()
+                local curCF = Camera.CFrame
+                local pitchRot = CFrame.Angles(-finalPitch, 0, 0)
+                local yawRot = CFrame.Angles(0, -finalYaw, 0)
+                Camera.CFrame = CFrame.new(curCF.Position) * yawRot * curCF.Rotation * pitchRot
+            end)
+        end
+    end)
+    SharedState.AddConnection(conn)
+
+    ShowNotification("Гироскоп", "Высокоточный 5-осевой гироскоп успешно активирован!", 4)
+end
+
+-- ╔══════════════════════════════════════════════════════════╗
 -- ║                      ЗАПУСК ВСЕХ МОДУЛЕЙ                 ║
 -- ╚══════════════════════════════════════════════════════════╝
 ShowNotification("AIO Suite", "Загрузка объединенного пака оптимизаций...", 4)
 task.wait(0.5)
 
 InitFFlags()
+InitLightingOptimizer()
 InitOptimizerAndStretch()
+InitZeroCamShake()
+InitShiftLock()
+InitRaisedCrosshair()
+InitJumpDistanceRadius()
+InitTransparentAuraNoCollision()
 InitPrediction()
 InitSmartGlow()
 InitServerGhost()
+InitAdvancedGyroscope()
 
-ShowNotification("Готово", "Все модули успешно запущены и оптимизированы!", 6)
+ShowNotification("Готово", "Все модули успешно запущены и настроены!", 6)
