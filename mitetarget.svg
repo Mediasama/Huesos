@@ -1,0 +1,106 @@
+import svgwrite
+
+def create_target_esp_svg(filename="target_esp.svg"):
+    dwg = svgwrite.Drawing(filename, size=('1024px', '1024px'), viewBox='0 0 1024 1024')
+    
+    # Mint & Cyan color palette
+    main_fill = "#2affd0"       # Vibrant mint
+    contrast_stroke = "#00b3b3" # Darker teal/cyan
+    accent_mint = "#a3ffe8"     # Light mint highlight
+    
+    # Center group at (512, 512)
+    center_x, center_y = 512, 512
+    
+    # Background - fully transparent, but we can add a group for styles
+    main_group = dwg.g(id="target_esp")
+    dwg.add(main_group)
+    
+    # We will generate 4 symmetrical quadrants/directions: Top, Right, Bottom, Left
+    # Angle offsets for 4-fold rotational symmetry: 0, 90, 180, 270 degrees
+    
+    for angle in [0, 90, 180, 270]:
+        g = dwg.g(transform=f"rotate({angle}, {center_x}, {center_y})")
+        
+        # 1. Inner Circle & Point (Center Element)
+        # Point at distance 90 from center
+        g.add(dwg.circle(center=(512, 422), r=16, fill=main_fill, stroke=contrast_stroke, stroke_width=3))
+        
+        # 2. Inner Chevron (Arrow pointing outwards or inwards)
+        # Arrow near the center point
+        inner_arrow = dwg.polygon(
+            points=[
+                (512, 385),
+                (482, 415),
+                (492, 422),
+                (512, 402),
+                (532, 422),
+                (542, 415)
+            ],
+            fill=main_fill,
+            stroke=contrast_stroke,
+            stroke_width=2
+        )
+        g.add(inner_arrow)
+        
+        # Additional inner accent lines
+        inner_v = dwg.polyline(
+            points=[(470, 400), (512, 358), (554, 400)],
+            fill="none",
+            stroke=main_fill,
+            stroke_width=8,
+            stroke_linecap="round",
+            stroke_linejoin="round"
+        )
+        g.add(inner_v)
+        
+        # 3. Outer Double Chevron / Diamond Shapes
+        # Outer Chevron 1 (Large)
+        outer_chev1 = dwg.polyline(
+            points=[(220, 512), (512, 220), (804, 512)],
+            fill="none",
+            stroke=main_fill,
+            stroke_width=24,
+            stroke_linecap="round",
+            stroke_linejoin="round"
+        )
+        # We only draw half or overlapping segments to match user's intersecting design
+        # Outer Chevron 2 (Shifted/Overlapping)
+        outer_chev2 = dwg.polyline(
+            points=[(270, 512), (512, 170), (754, 512)],
+            fill="none",
+            stroke=accent_mint,
+            stroke_width=18,
+            stroke_linecap="round",
+            stroke_linejoin="round"
+        )
+        
+        # Border outline for crisp render
+        outer_chev1_border = dwg.polyline(
+            points=[(220, 512), (512, 220), (804, 512)],
+            fill="none",
+            stroke=contrast_stroke,
+            stroke_width=4,
+            stroke_linecap="round",
+            stroke_linejoin="round"
+        )
+        
+        g.add(outer_chev2)
+        g.add(outer_chev1)
+        g.add(outer_chev1_border)
+        
+        main_group.add(g)
+
+    # Central Ring connecting the 4 points
+    central_ring = dwg.circle(
+        center=(center_x, center_y),
+        r=90,
+        fill="none",
+        stroke=main_fill,
+        stroke_width=6
+    )
+    main_group.add(central_ring)
+
+    dwg.save()
+
+create_target_esp_svg()
+
