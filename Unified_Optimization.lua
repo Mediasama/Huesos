@@ -2,7 +2,7 @@
     ╔══════════════════════════════════════════════════════════╗
     ║        OBSIDIAN PREMIUM SUITE: UNIFIED & OPTIMIZED       ║
     ║   Объединенный и улучшенный пакет скриптов (AIO)         ║
-    ║   Стиль: Мятный Графит (Matted Mint)                     ║
+    ║   Стиль: Мятный Графит (Matted Mint - Overhaul Style)    ║
     ║                                                          ║
     ║   Особенности:                                           ║
     ║   - Полная интеграция с Obsidian UI Library              ║
@@ -11,6 +11,7 @@
     ║   - 5-столпный высокочувствительный мобильный гироскоп   ║
     ║   - Текстурный прицел img_0_pk.png с fallback            ║
     ║   - Полная защита от повторного запуска (без утечек)    ║
+    ║   - НИКАКИХ слайдеров и ПК биндов — для смартфонов!      ║
     ╚══════════════════════════════════════════════════════════╝
 ]]
 
@@ -83,6 +84,8 @@ function SharedState.Cleanup()
     end
     -- Сброс коллизии камеры к стандартному поведению Zoom
     pcall(function() player.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Zoom end)
+    -- Отключаем гироскопический рендер
+    pcall(function() RunService:UnbindFromRenderStep("AIO_GyroCamera") end)
 
     SharedState.Connections = {}
     SharedState.Drawings = {}
@@ -143,21 +146,33 @@ local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
 local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
 local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
 
--- Настройка темы мятного стиля через ThemeManager по умолчанию (предотвращает баги "got string" при ручной смене Library.Scheme)
+-- Настройка мятного стиля по умолчанию (переопределяем ДО CreateWindow для 100% безопасности от "got string" крашей)
 pcall(function()
-    ThemeManager:SetDefaultTheme({
-        AccentColor = Color3.fromRGB(150, 255, 200), -- Мятный Graphite
-        MainColor = Color3.fromRGB(25, 25, 30),
-        BackgroundColor = Color3.fromRGB(20, 20, 25),
-        OutlineColor = Color3.fromRGB(40, 40, 45),
-        FontColor = Color3.fromRGB(255, 255, 255)
-    })
+    local mintAccent = Color3.fromRGB(0, 255, 200) -- Тот самый яркий неоновый мятный цвет из Overhaul!
+    local darkAccent = Color3.fromRGB(0, 200, 150)
+    local bgDark = Color3.fromRGB(20, 20, 25)
+    local borderDark = Color3.fromRGB(40, 40, 45)
+    local textWhite = Color3.fromRGB(255, 255, 255)
+    local textGray = Color3.fromRGB(180, 180, 180)
+
+    Library.Theme = {
+        AccentColor = mintAccent,
+        AccentColorDark = darkAccent,
+        BackgroundColor = bgDark,
+        BorderColor = borderDark,
+        TextColor = textWhite,
+        SubTextColor = textGray,
+        MainColor = bgDark,
+        OutlineColor = borderDark,
+        FontColor = textWhite,
+    }
+    Library.ColorScheme = Library.Theme
 end)
 
 local Window = Library:CreateWindow({
     Title = "Obsidian Suite | Matted Mint",
     Footer = "Разработано для авто-выполнения | v2.5",
-    Icon = 95816097006870, -- Числовое значение ID предотвращает ошибки Color/string
+    Icon = 95816097006870,
     NotifySide = "Right",
     ShowCustomCursor = false,
 })
@@ -201,7 +216,7 @@ local Settings = {
     Comfort = {
         ZeroCamShake = true,
         ShiftLock = false,
-        ShiftLockKey = "L",
+        ShiftOffsetDistance = 2.0, -- Динамическое смещение плеча вбок
     },
     Crosshair = {
         Enabled = true,
@@ -209,7 +224,7 @@ local Settings = {
     },
     JumpRadius = {
         Enabled = true,
-        Color = Color3.fromRGB(255, 170, 0),
+        Color = Color3.fromRGB(0, 255, 200),
     },
     Character = {
         Transparent = true,
@@ -271,6 +286,7 @@ local flagtables = {
     ["DFIntRakNetMinAckGrowthPercent"] = "0",
     ["DFIntRakNetMtuValue1InBytes"] = "1280",
     ["DFIntRakNetMtuValue2InBytes"] = "1240",
+    ["DFIntFolderColor"] = "0",
     ["DFIntRakNetMtuValue3InBytes"] = "1200",
     ["DFIntConnectionMTUSize"] = "1260",
     ["DFIntMaxReceiveToDeserializeLatencyMilliseconds"] = "15",
@@ -423,9 +439,9 @@ local function InitOptimizerAndLighting()
                 Lighting.GlobalShadows = not Settings.Lighting.ContrastPreserve
 
                 if Settings.Lighting.ContrastPreserve then
-                    -- Сохранение глубины: стены не будут абсолютно одинаково плоскими
-                    Lighting.Ambient = Color3.fromRGB(135, 135, 145)
-                    Lighting.OutdoorAmbient = Color3.fromRGB(155, 155, 165)
+                    -- Мягкий рассеянный свет с сохранением глубины теней
+                    Lighting.Ambient = Color3.fromRGB(130, 130, 140)
+                    Lighting.OutdoorAmbient = Color3.fromRGB(150, 150, 160)
                 else
                     Lighting.Ambient = Color3.fromRGB(255, 255, 255)
                     Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
@@ -464,8 +480,8 @@ local function InitCameraStretch()
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
--- ║         2. МОДУЛЬ КАМЕРЫ (SHIFT LOCK, ZERO SHAKE)        ║
--- ╚══════════════════════════════════════════════════════════╝
+-- ║         2. МОДУЛЬ КАМЕРА (SHIFT LOCK, ZERO SHAKE)        ║
+-- ╚══════════════════════════════════════════════════════════╗
 local function InitCameraComfort()
     -- Zero Cam Shake
     local connShake = RunService.RenderStepped:Connect(function()
@@ -481,29 +497,17 @@ local function InitCameraComfort()
     end)
     SharedState.AddConnection(connShake)
 
-    -- Custom ShiftLock / Shoulder Shift
-    local shiftLockActive = false
-    local shiftOffset = Vector3.new(2, 0.5, 0)
-
-    local inputConn = UserInputService.InputBegan:Connect(function(input, processed)
-        if processed then return end
-        if Settings.Comfort.ShiftLock and input.KeyCode == Enum.KeyCode[Settings.Comfort.ShiftLockKey] then
-            shiftLockActive = not shiftLockActive
-            UserInputService.MouseBehavior = shiftLockActive and Enum.MouseBehavior.LockCenter or Enum.MouseBehavior.Default
-            Library:Notify({
-                Title = "ShiftLock",
-                Description = "Кастомный ShiftLock: " .. (shiftLockActive and "АКТИВЕН" or "ВЫКЛЮЧЕН"),
-                Time = 2,
-            })
-        end
-    end)
-    SharedState.AddConnection(inputConn)
-
+    -- Custom ShiftLock / Shoulder Shift (Полностью без тряски и глитчей физики)
     local renderConn = RunService.RenderStepped:Connect(function()
-        if Settings.Comfort.ShiftLock and shiftLockActive then
-            UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
-            local char = player.Character
-            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        local char = player.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+
+        if Settings.Comfort.ShiftLock then
+            if hum then
+                -- Отключаем AutoRotate, чтобы физика гуманоида не спорила с нашим вращением!
+                hum.AutoRotate = false
+            end
             if hrp then
                 local camLook = Camera.CFrame.LookVector
                 local flatLook = Vector3.new(camLook.X, 0, camLook.Z).Unit
@@ -511,11 +515,15 @@ local function InitCameraComfort()
                     hrp.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + flatLook)
                 end)
             end
-            Camera.CFrame = Camera.CFrame * CFrame.new(shiftOffset)
+            Camera.CFrame = Camera.CFrame * CFrame.new(Vector3.new(Settings.Comfort.ShiftOffsetDistance, 0.5, 0))
+        else
+            if hum and not hum.AutoRotate then
+                hum.AutoRotate = true
+            end
         end
     end)
     SharedState.AddConnection(renderConn)
-    ConsoleLog("Модули комфорта и кастомного ShiftLock подключены.")
+    ConsoleLog("Модули комфорта и кастомного плеча камеры подключены.")
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
@@ -548,7 +556,7 @@ local function InitRaisedCrosshair()
         ConsoleLog("Текстура img_0_pk.png не поддерживается. Переключение на векторный fallback.")
         for i = 1, 4 do
             local line = CreateDrawing("Line")
-            line.Color = Color3.fromRGB(150, 255, 200)
+            line.Color = Color3.fromRGB(0, 255, 200)
             line.Thickness = 1.5
             line.Visible = true
             table.insert(vectorLines, line)
@@ -655,12 +663,21 @@ local function InitAvatarModifications()
         -- Камера без коллизии стен
         pcall(function() player.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Invisicam end)
 
-        -- Делаем ВСЕ части персонажа полностью прозрачными
-        for _, obj in ipairs(char:GetDescendants()) do
-            if obj:IsA("BasePart") or obj:IsA("Decal") then
-                obj.Transparency = Settings.Character.Transparent and 1.0 or 0.0
-            end
+        local function MakeTransparent(obj)
+            pcall(function()
+                if obj:IsA("BasePart") or obj:IsA("Decal") then
+                    obj.Transparency = Settings.Character.Transparent and 1.0 or 0.0
+                end
+            end)
         end
+
+        -- Делаем ВСЕ части персонажа полностью прозрачными (включая динамически загруженные аксессуары)
+        for _, obj in ipairs(char:GetDescendants()) do
+            MakeTransparent(obj)
+        end
+
+        local dynConn = char.DescendantAdded:Connect(MakeTransparent)
+        SharedState.AddConnection(dynConn)
 
         if not Settings.Character.Aura then return end
 
@@ -1040,7 +1057,7 @@ local function InitServerGhost()
         local b = Instance.new("SelectionBox")
         b.Adornee = g
         b.LineThickness = 0.02
-        b.Color3 = Color3.fromRGB(150, 255, 200)
+        b.Color3 = Color3.fromRGB(0, 255, 200)
         b.Parent = g
         SharedState.AddInstance(b)
 
@@ -1131,7 +1148,7 @@ local function InitServerGhost()
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
--- ║         9. ВЫСОКОКЛАССНЫЙ ГИРОСКОП С FALLBACK (SENSOR)   ║
+-- ║  9. ПРЕМИАЛЬНЫЙ 1-ST/3-RD PERSON ГИРОСКОП (НЕ КОНФЛИКТУЕТ)║
 -- ╚══════════════════════════════════════════════════════════╝
 local function InitAdvancedGyroscope()
     if not Settings.Gyroscope.Enabled then return end
@@ -1140,39 +1157,40 @@ local function InitAdvancedGyroscope()
 
     local sPrevPitch = 0
     local sPrevYaw = 0
+    local prevDevRot = nil
 
-    local conn = RunService.RenderStepped:Connect(function(dt)
+    pcall(function() RunService:UnbindFromRenderStep("AIO_GyroCamera") end)
+
+    -- Повышаем приоритет рендеринга выше Camera (Camera.Value + 10), чтобы работать поверх дефолтных свайпов!
+    RunService:BindToRenderStep("AIO_GyroCamera", Enum.RenderPriority.Camera.Value + 10, function(dt)
         if not Settings.Gyroscope.Enabled then return end
 
-        -- Многоуровневый алгоритм получения наклона (3 источника для 100% совместимости)
         local rawPitch, rawYaw = 0, 0
         local successRot, rotRate = pcall(function() return UserInputService:GetDeviceRotationRate() end)
 
+        -- Считываем дельты Pitch и Yaw
         if successRot and rotRate and (math.abs(rotRate.X) > 0.01 or math.abs(rotRate.Y) > 0.01) then
             rawPitch = rotRate.X
             rawYaw = rotRate.Y
         else
-            -- Источник 2: DeviceRotation CFrame
+            -- Резервный расчет по Delta поворота DeviceRotation (устраняет бесконечное заваливание / joystick-спин)
             local successCFrame, devRot = pcall(function() return UserInputService.DeviceRotation end)
             if successCFrame and devRot then
-                local rx, ry, rz = devRot:ToEulerAnglesXYZ()
-                rawPitch = rx
-                rawYaw = ry
-            else
-                -- Источник 3: Попытка аппроксимировать по гравитационному наклону (акселерометр)
-                local successGrav, devGrav = pcall(function() return UserInputService.DeviceGravity end)
-                if successGrav and devGrav then
-                    rawPitch = devGrav.Y * 2
-                    rawYaw = devGrav.X * 2
+                if prevDevRot then
+                    local deltaRot = prevDevRot:Inverse() * devRot
+                    local dx, dy, dz = deltaRot:ToEulerAnglesXYZ()
+                    rawPitch = dx
+                    rawYaw = dy
                 end
+                prevDevRot = devRot
             end
         end
 
-        -- Смягчение мертвой зоны
+        -- 1. Подавление микротремора (EMA Low-Pass) + Deadzone
         if math.abs(rawPitch) < Settings.Gyroscope.Deadzone then rawPitch = 0 end
         if math.abs(rawYaw) < Settings.Gyroscope.Deadzone then rawYaw = 0 end
 
-        -- Фильтрация низких частот + адаптивное сглаживание микротремора
+        -- 2. Адаптивное сглаживание (Dynamic Alpha)
         local magP = math.abs(rawPitch)
         local alphaP = Settings.Gyroscope.AlphaMin + (Settings.Gyroscope.AlphaMax - Settings.Gyroscope.AlphaMin) * (1 - math.exp(-Settings.Gyroscope.AlphaSpeedCoeff * magP * magP))
         local sFilteredPitch = alphaP * rawPitch + (1 - alphaP) * sPrevPitch
@@ -1183,28 +1201,43 @@ local function InitAdvancedGyroscope()
         local sFilteredYaw = alphaY * rawYaw + (1 - alphaY) * sPrevYaw
         sPrevYaw = sFilteredYaw
 
-        -- Нелинейное прогрессивное ускорение вращения
+        -- 3. Нелинейное прогрессивное ускорение вращения (AAA Curve)
         local speedP = math.abs(sFilteredPitch)
         local accelP = 1 + (Settings.Gyroscope.AccelFactor * speedP * speedP) / (1 + (speedP / Settings.Gyroscope.AccelLimit) * (speedP / Settings.Gyroscope.AccelLimit))
 
         local speedY = math.abs(sFilteredYaw)
         local accelY = 1 + (Settings.Gyroscope.AccelFactor * speedY * speedY) / (1 + (speedY / Settings.Gyroscope.AccelLimit) * (speedY / Settings.Gyroscope.AccelLimit))
 
+        -- Финальные угловые дельты поворота
         local finalPitch = sFilteredPitch * Settings.Gyroscope.PitchSensitivity * accelP * dt
         local finalYaw = sFilteredYaw * Settings.Gyroscope.YawSensitivity * accelY * dt
 
-        -- Плавное и точное ориентирование камеры (без заваливания горизонта)
+        -- 4. Вращение камеры (работает поверх пользовательских свайпов, без заваливания горизонта, поддерживает 1st/3rd person)
         if math.abs(finalPitch) > 0.0001 or math.abs(finalYaw) > 0.0001 then
             pcall(function()
-                local curCF = Camera.CFrame
-                local pitchRot = CFrame.Angles(-finalPitch, 0, 0)
-                local yawRot = CFrame.Angles(0, -finalYaw, 0)
-                Camera.CFrame = CFrame.new(curCF.Position) * yawRot * curCF.Rotation * pitchRot
+                local currentCF = Camera.CFrame
+                local focusPos = Camera.Focus.Position
+                local distance = (currentCF.Position - focusPos).Magnitude
+
+                -- Считываем дельты с ToOrientation() для 100% математической корректности осей
+                local rx, ry, rz = currentCF:ToOrientation() -- rx = pitch, ry = yaw, rz = roll
+
+                -- Корректируем Pitch (X) и Yaw (Y)
+                rx = math.clamp(rx - finalPitch, -math.rad(80), math.rad(80))
+                ry = ry - finalYaw
+
+                local targetRotation = CFrame.fromOrientation(rx, ry, 0)
+
+                if distance < 1 then
+                    -- 1st Person
+                    Camera.CFrame = CFrame.new(currentCF.Position) * targetRotation
+                else
+                    -- 3rd Person (орбитальное вращение вокруг персонажа)
+                    Camera.CFrame = CFrame.new(focusPos) * targetRotation * CFrame.new(0, 0, distance)
+                end
             end)
         end
     end)
-    SharedState.AddConnection(conn)
-    ConsoleLog("Продвинутый 5-осевой гироскоп успешно запущен.")
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
@@ -1276,7 +1309,7 @@ VisualGroup:AddToggle("ServerGhostToggle", {
     end
 })
 
--- Комфорт
+-- Комфорт (Полностью убраны ПК бинды)
 ComfortGroup:AddToggle("ZeroCamShakeToggle", {
     Text = "Zero Cam Shake (Без тряски)",
     Default = Settings.Comfort.ZeroCamShake,
@@ -1286,19 +1319,23 @@ ComfortGroup:AddToggle("ZeroCamShakeToggle", {
 })
 
 ComfortGroup:AddToggle("ShiftLockToggle", {
-    Text = "Кастомный Shoulder ShiftLock",
+    Text = "Кастомный Shoulder ShiftLock (Смещение плеча)",
     Default = Settings.Comfort.ShiftLock,
     Callback = function(v)
         Settings.Comfort.ShiftLock = v
     end
 })
 
-ComfortGroup:AddDropdown("ShiftLockKeyDropdown", {
-    Values = { "L", "Q", "Z", "LeftControl", "LeftShift" },
-    Default = "L",
-    Text = "Клавиша ShiftLock",
-    Callback = function(v)
-        Settings.Comfort.ShiftLockKey = v
+ComfortGroup:AddInput("ShiftOffsetInput", {
+    Text = "Смещение камеры вбок (Плечо)",
+    Default = tostring(Settings.Comfort.ShiftOffsetDistance),
+    Numeric = true,
+    Finished = true,
+    Callback = function(Value)
+        local num = tonumber(Value)
+        if num then
+            Settings.Comfort.ShiftOffsetDistance = num
+        end
     end
 })
 
@@ -1327,16 +1364,15 @@ AvatarGroup:AddToggle("AuraToggle", {
     end
 })
 
--- Настройки гироскопа
+-- Настройки гироскопа (Полностью без ПК биндов, с инпутами)
 GyroSettingsGroup:AddToggle("GyroToggle", {
-    Text = "Включить Умный Гироскоп",
+    Text = "Включить Умный AAA-Гироскоп",
     Default = Settings.Gyroscope.Enabled,
     Callback = function(v)
         Settings.Gyroscope.Enabled = v
     end
 })
 
--- Никаких слайдеров для гироскопа! Заменено на числовые поля (AddInput) для максимального удобства мобильных геймеров
 GyroSettingsGroup:AddInput("PitchSensInput", {
     Text = "Чувствительность Вертикаль (Pitch)",
     Default = tostring(Settings.Gyroscope.PitchSensitivity),
@@ -1375,11 +1411,8 @@ GyroInfoGroup:AddLabel("Статус: Активен")
 GyroInfoGroup:AddLabel("Фильтрация шума: EMA Low-Pass")
 GyroInfoGroup:AddLabel("Ускорение: Динамическое нелинейное")
 
--- Консоль вывода логов (console.lua)
-local ConsoleBox = ConsoleGroup:AddLabel("ConsoleOutput", {
-    Text = "Ожидание запуска логов...\n",
-    DoesWrap = true,
-})
+-- Консоль вывода логов (console.lua) - Использование ПРАВИЛЬНОЙ сигнатуры AddLabel(text, doesWrap)
+local ConsoleBox = ConsoleGroup:AddLabel("Ожидание запуска логов...\n", true)
 getgenv().ObsidianConsoleLabel = ConsoleBox
 
 -- ╔══════════════════════════════════════════════════════════╗
