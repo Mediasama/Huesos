@@ -1,112 +1,37 @@
 --[[
     ╔══════════════════════════════════════════════════════════╗
-    ║       UNIFIED OPTIMIZATION & INFO SUITE (AIO)            ║
-    ║   Объединенный и улучшенный скрипт для авто-выполнения   ║
+    ║        OBSIDIAN PREMIUM SUITE: UNIFIED & OPTIMIZED       ║
+    ║   Объединенный и улучшенный пакет скриптов (AIO)         ║
+    ║   Стиль: Мятный Графит (Matted Mint)                     ║
     ║                                                          ║
     ║   Особенности:                                           ║
-    ║   1. Модульная структура с полной изоляцией переменных    ║
-    ║   2. Полная защита от повторного запуска (без утечек)    ║
-    ║   3. Единое и красивое меню настроек в начале файла     ║
-    ║   4. Интегрированные уведомления для всех событий         ║
-    ║   5. Оптимальный рендеринг и совместимость с Drawing     ║
+    ║   - Полная интеграция с Obsidian UI Library              ║
+    ║   - Перенесены универсалка.lua и console.lua             ║
+    ║   - 100% прозрачность персонажа + neon аура-сфера        ║
+    ║   - 5-столпный высокочувствительный мобильный гироскоп   ║
+    ║   - Текстурный прицел img_0_pk.png с fallback            ║
+    ║   - Полная защита от повторного запуска (без утечек)    ║
     ╚══════════════════════════════════════════════════════════╝
 ]]
 
 -- ╔══════════════════════════════════════════════════════════╗
--- ║                  ГЛОБАЛЬНЫЕ НАСТРОЙКИ                    ║
--- ╚══════════════════════════════════════════════════════════╝
-local Settings = {
-    Notifications = {
-        Enabled = true,
-        Duration = 5,
-        ThemeColor = Color3.fromRGB(0, 255, 200),
-        BgColor = Color3.fromRGB(20, 20, 25),
-    },
-    Performance = {
-        EnableFFlags = true,      -- Включить тонкую настройку FFlags для максимального FPS
-        OptimizeMap = true,       -- Удалить тяжелые текстуры и упростить материалы карты
-        DisableParticles = true,  -- Выключить тяжелые эффекты частиц и следы (Trails)
-    },
-    Lighting = {
-        Enabled = true,
-        Fullbright = true,        -- Максимальная яркость (Fullbright)
-        RemoveAtmosphere = true,  -- Полное удаление тумана/атмосферы для 100% видимости
-        ContrastPreserve = true,  -- Сохранение контраста: в замкнутых пространствах стены не будут сливаться!
-    },
-    Screen = {
-        StretchedResolution = 0.65, -- "Растянутый экран" (камера-трюк). 0.65 = шире/больше FPS, 1.0 = выключено
-    },
-    CameraComfort = {
-        ZeroCamShake = true,      -- Полное отключение тряски камеры (Zero Cam Shake)
-        ShiftLockEnabled = true,  -- Кастомный Shoulder ShiftLock
-        ShiftLockKey = Enum.KeyCode.L, -- Клавиша переключения ShiftLock (по умолчанию 'L')
-    },
-    Crosshair = {
-        Enabled = true,
-        VerticalOffset = -20,     -- Смещение прицела вверх от центра (Raised Crosshair)
-        Size = 10,                -- Размер линий прицела
-        Gap = 4,                  -- Зазор по центру
-        Color = Color3.fromRGB(0, 255, 200),
-    },
-    JumpRadius = {
-        Enabled = true,
-        Color = Color3.fromRGB(255, 170, 0), -- Круг предела прыжка (Jump Distance Radius)
-    },
-    CharacterGlow = {
-        Enabled = true,
-        Transparency = 0.85,      -- Прозрачный персонаж
-        AuraColor = Color3.fromRGB(0, 255, 255), -- Цвет светящейся ауры-сферы
-    },
-    Prediction = {
-        Enabled = true,
-        PreJumpEnabled = false,   -- Показ траектории до прыжка по умолчанию (Клавиша 'H' для вкл/выкл)
-        PredictDotColor = Color3.fromRGB(0, 255, 255),
-        LandDotColor = Color3.fromRGB(255, 100, 100),
-        LandOutlineColor = Color3.fromRGB(255, 150, 150),
-        VelocityColor = Color3.fromRGB(0, 255, 0),
-        TrajectoryColor = Color3.fromRGB(255, 240, 140),
-        PreJumpColor = Color3.fromRGB(100, 200, 255),
-    },
-    SmartGlow = {
-        Enabled = true,
-        Keywords = {"prompt", "proximity", "touch", "interact", "trigger"},
-        FolderColor = Color3.fromRGB(255, 170, 0), -- Цвет свечения для папок/групп
-        SingleColor = Color3.fromRGB(0, 255, 255), -- Цвет свечения для одиночных объектов
-        Transparency = 0.8,                        -- Прозрачность линий
-        PulseSpeed = 1.5,                          -- Период пульсации в секундах
-    },
-    ServerGhost = {
-        Enabled = true,
-        UseRGB = false,                            -- Использовать RGB радугу для призрака пинга
-        Color = Color3.fromRGB(150, 255, 200),     -- Мягкий мятный цвет призрака
-        Strength = 1.0,                            -- Множитель силы предсказания пинга
-        MaxLimbDistance = 6,                       -- Максимальный разброс конечностей призрака
-    },
-    Gyroscope = {
-        Enabled = true,                            -- Физический, супер-плавный 5-столпный гироскоп
-        PitchSensitivity = 1.2,                    -- Чувствительность по вертикали
-        YawSensitivity = 1.5,                      -- Чувствительность по горизонтали
-        Deadzone = 0.005,                          -- Мертвая зона для компенсации дрейфа нуля
-        AlphaMin = 0.1,                            -- Максимальное сглаживание микротремора
-        AlphaMax = 0.9,                            -- Быстрый разворот (сглаживание отключается)
-        AlphaSpeedCoeff = 8.0,                     -- Насколько быстро сглаживание уступает место скорости
-        AccelFactor = 1.5,                         -- Сила нелинейного ускорения поворота
-        AccelLimit = 2.5,                          -- Лимит нелинейного ускорения
-    }
-}
-
--- ╔══════════════════════════════════════════════════════════╗
--- ║             ИНИЦИАЛИЗАЦИЯ И СИСТЕМА ОЧИСТКИ              ║
+-- ║             ИНИЦИАЛИЗАЦИЯ И СЕРВИСЫ                      ║
 -- ╚══════════════════════════════════════════════════════════╝
 local Players      = game:GetService("Players")
 local RunService   = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local HttpService  = game:GetService("HttpService")
 local CoreGui      = game:GetService("CoreGui")
+local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
 
--- Защита от повторного запуска (Предотвращает дублирование хуков, отрисовок и лагов)
+-- Динамическое получение текущей камеры (на случай смены/спавна)
+local Camera = workspace.CurrentCamera or workspace:FindFirstChildOfClass("Camera")
+
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║                  СИСТЕМА СБРОСА И ОЧИСТКИ                ║
+-- ╚══════════════════════════════════════════════════════════╝
 if getgenv().UnifiedOptimizationSharedState then
     pcall(getgenv().UnifiedOptimizationSharedState.Cleanup)
 end
@@ -115,6 +40,7 @@ local SharedState = {
     Connections = {},
     Drawings = {},
     Instances = {},
+    Logs = {}
 }
 getgenv().UnifiedOptimizationSharedState = SharedState
 
@@ -139,7 +65,7 @@ function SharedState.Cleanup()
     for _, drawObj in ipairs(SharedState.Drawings) do
         pcall(function() drawObj:Remove() end)
     end
-    -- Удаляем созданные UI, Part-объекты и призраков
+    -- Удаляем созданные UI элементы, папки, светящиеся сферы и прочее
     for _, inst in ipairs(SharedState.Instances) do
         pcall(function() if inst and inst.Parent then inst:Destroy() end end)
     end
@@ -155,7 +81,7 @@ function SharedState.Cleanup()
             pcall(function() obj:Destroy() end)
         end
     end
-    -- Сброс игрока к стандарту по коллизии камеры
+    -- Сброс коллизии камеры к стандартному поведению Zoom
     pcall(function() player.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Zoom end)
 
     SharedState.Connections = {}
@@ -172,6 +98,7 @@ local dummyDrawingMt = {
         -- Игнорируем установку свойств
     end
 }
+
 local function CreateDrawing(drawingType)
     if Drawing and Drawing.new then
         local success, obj = pcall(Drawing.new, drawingType)
@@ -183,212 +110,143 @@ local function CreateDrawing(drawingType)
     return setmetatable({}, dummyDrawingMt)
 end
 
--- Динамическое получение текущей камеры (на случай смены/спавна)
-local Camera = workspace.CurrentCamera or workspace:FindFirstChildOfClass("Camera")
+-- Динамическое отслеживание смены Camera
 local camConnection = workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
     Camera = workspace.CurrentCamera or workspace:FindFirstChildOfClass("Camera")
 end)
 SharedState.AddConnection(camConnection)
 
--- ╔══════════════════════════════════════════════════════════╗
--- ║                     СИСТЕМА УВЕДОМЛЕНИЙ                  ║
--- ╚══════════════════════════════════════════════════════════╝
-local guiParent
-pcall(function()
-    if gethui then
-        guiParent = gethui()
-    elseif cloneref then
-        guiParent = cloneref(CoreGui)
-    else
-        guiParent = player:WaitForChild("PlayerGui")
+-- Логгер для console.lua интеграции
+local function ConsoleLog(msg)
+    local timestamp = os.date("%H:%M:%S")
+    local line = string.format("[%s] %s", timestamp, msg)
+    table.insert(SharedState.Logs, line)
+    if #SharedState.Logs > 150 then
+        table.remove(SharedState.Logs, 1)
     end
-end)
+    -- Обновляем текстовое поле в консоли Obsidian, если оно создано
+    if getgenv().ObsidianConsoleLabel then
+        pcall(function()
+            getgenv().ObsidianConsoleLabel:SetText(table.concat(SharedState.Logs, "\n"))
+        end)
+    end
+    print(line)
+end
 
-local notificationGui = Instance.new("ScreenGui")
-notificationGui.Name = "SMVLL_Notif_" .. HttpService:GenerateGUID(false):sub(1, 8)
-notificationGui.ResetOnSpawn = false
-notificationGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-pcall(function() notificationGui.Parent = guiParent end)
-SharedState.AddInstance(notificationGui)
+ConsoleLog("Инициализация Obsidian Suite...")
 
-local activeNotifications = {}
-local CONSTANTS = {
-    WIDTH = 280,
-    HEIGHT = 90,
-    PADDING = 15,
-    ANIMATION_SPEED = 0.4
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║         ЗАГРУЗКА И НАСТРОЙКА БИБЛИОТЕКИ OBSIDIAN         ║
+-- ╚══════════════════════════════════════════════════════════╝
+local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
+local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
+local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
+local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
+
+-- Настройка мятного стиля по умолчанию
+Library.Scheme = {
+    AccentColor = Color3.fromRGB(150, 255, 200), -- Тот самый мягкий мятный цвет
+    AccentColorDark = Color3.fromRGB(100, 200, 150),
+    BackgroundColor = Color3.fromRGB(20, 20, 25),
+    BorderColor = Color3.fromRGB(40, 40, 45),
+    TextColor = Color3.fromRGB(255, 255, 255),
+    SubTextColor = Color3.fromRGB(180, 180, 180),
 }
 
-local function UpdateNotifications()
-    for index, data in ipairs(activeNotifications) do
-        local targetY = -CONSTANTS.PADDING - ((index - 1) * (CONSTANTS.HEIGHT + CONSTANTS.PADDING))
-        TweenService:Create(data.Container, TweenInfo.new(CONSTANTS.ANIMATION_SPEED, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-            Position = UDim2.new(1, -CONSTANTS.PADDING, 1, targetY)
-        }):Play()
-    end
-end
+local Window = Library:CreateWindow({
+    Title = "Obsidian Suite | Matted Mint",
+    Footer = "Разработано для авто-выполнения | v2.5",
+    Icon = "rbxassetid://95816097006870",
+    NotifySide = "Right",
+    ShowCustomCursor = false,
+})
 
-local function ShowNotification(titleText, messageText, duration)
-    if not Settings.Notifications.Enabled then return end
-    duration = duration or Settings.Notifications.Duration
+-- Создаем вкладки
+local Tabs = {
+    Universal = Window:AddTab("Универсалка", "user"),
+    Gyro = Window:AddTab("Гироскоп", "compass"),
+    Console = Window:AddTab("Консоль", "terminal"),
+    Settings = Window:AddTab("Настройки UI", "settings"),
+}
 
-    local container = Instance.new("Frame")
-    container.Size = UDim2.new(0, CONSTANTS.WIDTH, 0, CONSTANTS.HEIGHT)
-    container.Position = UDim2.new(1, 350, 1, -CONSTANTS.PADDING)
-    container.AnchorPoint = Vector2.new(1, 1)
-    container.BackgroundTransparency = 1
-    container.Parent = notificationGui
-    SharedState.AddInstance(container)
+-- Групбоксы во вкладке Универсалка
+local OptGroup = Tabs.Universal:AddLeftGroupbox("Оптимизация и FFlags", "zap")
+local VisualGroup = Tabs.Universal:AddLeftGroupbox("Визуальные Элементы", "eye")
+local ComfortGroup = Tabs.Universal:AddRightGroupbox("Камера и Комфорт", "shield")
+local AvatarGroup = Tabs.Universal:AddRightGroupbox("Прозрачность и Аура", "shield")
 
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(1, 0, 1, 0)
-    frame.Position = UDim2.new(0.5, 0, 0.5, 0)
-    frame.AnchorPoint = Vector2.new(0.5, 0.5)
-    frame.BackgroundColor3 = Settings.Notifications.BgColor
-    frame.BorderSizePixel = 0
-    frame.Parent = container
+-- Групбокс во вкладке Гироскоп
+local GyroSettingsGroup = Tabs.Gyro:AddLeftGroupbox("Тонкая Настройка Гироскопа", "sliders")
+local GyroInfoGroup = Tabs.Gyro:AddRightGroupbox("Параметры и Статус", "info")
 
-    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
-
-    local stroke = Instance.new("UIStroke")
-    stroke.Color = Color3.fromRGB(40, 40, 45)
-    stroke.Thickness = 1
-    stroke.Parent = frame
-
-    local topAccent = Instance.new("Frame")
-    topAccent.Size = UDim2.new(1, 0, 0, 2)
-    topAccent.BackgroundColor3 = Settings.Notifications.ThemeColor
-    topAccent.BorderSizePixel = 0
-    topAccent.Parent = frame
-
-    local titleLabel = Instance.new("TextLabel")
-    titleLabel.Size = UDim2.new(1, -50, 0, 25)
-    titleLabel.Position = UDim2.new(0, 15, 0, 10)
-    titleLabel.BackgroundTransparency = 1
-    titleLabel.Text = titleText
-    titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    titleLabel.Font = Enum.Font.GothamBold
-    titleLabel.TextSize = 16
-    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
-    titleLabel.Parent = frame
-
-    local messageLabel = Instance.new("TextLabel")
-    messageLabel.Size = UDim2.new(1, -30, 0, 40)
-    messageLabel.Position = UDim2.new(0, 15, 0, 35)
-    messageLabel.BackgroundTransparency = 1
-    messageLabel.Text = messageText
-    messageLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
-    messageLabel.Font = Enum.Font.GothamMedium
-    messageLabel.TextSize = 13
-    messageLabel.TextWrapped = true
-    messageLabel.TextXAlignment = Enum.TextXAlignment.Left
-    messageLabel.TextYAlignment = Enum.TextYAlignment.Top
-    messageLabel.Parent = frame
-
-    local closeBtn = Instance.new("TextButton")
-    closeBtn.Size = UDim2.new(0, 24, 0, 24)
-    closeBtn.Position = UDim2.new(1, -10, 0, 10)
-    closeBtn.AnchorPoint = Vector2.new(1, 0)
-    closeBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-    closeBtn.Text = "X"
-    closeBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
-    closeBtn.Font = Enum.Font.GothamBold
-    closeBtn.TextSize = 12
-    closeBtn.AutoButtonColor = false
-    closeBtn.Parent = frame
-
-    Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 6)
-
-    local dots = {}
-    local closed = false
-
-    for i = 1, 3 do
-        local dot = Instance.new("Frame")
-        dot.Size = UDim2.new(0, 6, 0, 6)
-        dot.Position = UDim2.new(0, 15 + (i - 1) * 14, 1, -18)
-        dot.AnchorPoint = Vector2.new(0.5, 0.5)
-        dot.BackgroundColor3 = Settings.Notifications.ThemeColor
-        dot.BorderSizePixel = 0
-        dot.Parent = frame
-
-        Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
-        dots[i] = dot
-
-        task.delay((i - 1) * 0.15, function()
-            if not closed then
-                TweenService:Create(dot, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
-                    Position = UDim2.new(0, dot.Position.X.Offset, 1, -22)
-                }):Play()
-            end
-        end)
-    end
-
-    local notifData = {Container = container}
-    table.insert(activeNotifications, 1, notifData)
-    UpdateNotifications()
-
-    TweenService:Create(frame, TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
-        Rotation = 1.2,
-        Position = UDim2.new(0.5, 0, 0.5, -3)
-    }):Play()
-
-    closeBtn.MouseEnter:Connect(function()
-        TweenService:Create(closeBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(220, 50, 50), TextColor3 = Color3.fromRGB(255, 255, 255)}):Play()
-    end)
-    closeBtn.MouseLeave:Connect(function()
-        TweenService:Create(closeBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(30, 30, 35), TextColor3 = Color3.fromRGB(150, 150, 150)}):Play()
-    end)
-
-    local function CloseNotification()
-        if closed then return end
-        closed = true
-
-        local targetIndex = table.find(activeNotifications, notifData)
-        if targetIndex then
-            table.remove(activeNotifications, targetIndex)
-            UpdateNotifications()
-        end
-
-        local tweenOut = TweenService:Create(container, TweenInfo.new(CONSTANTS.ANIMATION_SPEED, Enum.EasingStyle.Sine, Enum.EasingDirection.In), {
-            Position = UDim2.new(1, 350, container.Position.Y.Scale, container.Position.Y.Offset)
-        })
-        tweenOut:Play()
-        tweenOut.Completed:Wait()
-        container:Destroy()
-    end
-
-    closeBtn.MouseButton1Click:Connect(CloseNotification)
-
-    local interval = duration / 3
-    for i = 3, 1, -1 do
-        task.delay(interval * (4 - i), function()
-            if not closed and dots[i] then
-                local popTween = TweenService:Create(dots[i], TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
-                    Size = UDim2.new(0, 0, 0, 0),
-                    BackgroundTransparency = 1
-                })
-                popTween:Play()
-                if i == 1 then
-                    popTween.Completed:Wait()
-                    if not closed then CloseNotification() end
-                end
-            end
-        end)
-    end
-end
+-- Групбокс во вкладке Консоль
+local ConsoleGroup = Tabs.Console:AddLeftGroupbox("Окно Вывода Консоли", "terminal")
 
 -- ╔══════════════════════════════════════════════════════════╗
--- ║         1. МОДУЛЬ: ТАБЛИЦА И ИНЪЕКЦИЯ FFLAGS             ║
+-- ║                    НАСТРОЙКИ ПО УМОЛЧАНИЮ                ║
+-- ╚══════════════════════════════════════════════════════════╝
+local Settings = {
+    Performance = {
+        EnableFFlags = true,
+        OptimizeMap = true,
+        DisableParticles = true,
+        StretchedResolution = 0.65,
+    },
+    Lighting = {
+        Fullbright = true,
+        RemoveAtmosphere = true,
+        ContrastPreserve = true,
+    },
+    Comfort = {
+        ZeroCamShake = true,
+        ShiftLock = false,
+        ShiftLockKey = "L",
+    },
+    Crosshair = {
+        Enabled = true,
+        VerticalOffset = -20,
+    },
+    JumpRadius = {
+        Enabled = true,
+        Color = Color3.fromRGB(255, 170, 0),
+    },
+    Character = {
+        Transparent = true,
+        Aura = true,
+        AuraColor = Color3.fromRGB(0, 255, 255),
+    },
+    Prediction = {
+        Enabled = true,
+        PreJumpEnabled = false,
+    },
+    SmartGlow = {
+        Enabled = true,
+    },
+    ServerGhost = {
+        Enabled = true,
+    },
+    Gyroscope = {
+        Enabled = true,
+        PitchSensitivity = 1.2,
+        YawSensitivity = 1.5,
+        Deadzone = 0.005,
+        AlphaMin = 0.1,
+        AlphaMax = 0.9,
+        AlphaSpeedCoeff = 8.0,
+        AccelFactor = 1.5,
+        AccelLimit = 2.5,
+    }
+}
+
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║         1. МОДУЛЬ FFLAGS И ОПТИМИЗАЦИИ (PERFORMANCE)     ║
 -- ╚══════════════════════════════════════════════════════════╝
 local flagtables = {
-    -- Performance & Task Scheduler
     ["DFIntTaskSchedulerTargetFps"] = "9999",
     ["FIntTaskSchedulerAutoThreadLimit"] = "6",
     ["FIntTaskSchedulerAsyncTasksMinimumThreadCount"] = "2",
     ["FIntTaskSchedulerMaxNumOfJobs"] = "86",
     ["FIntTaskSchedulerThreadMin"] = "1",
-
-    -- DFFlags
     ["DFFlagBrowserTrackerIdTelemetryEnabled"] = "False",
     ["DFFlagPreloadAsyncSupportTexturePack"] = "True",
     ["DFFlagTextureQualityOverrideEnabled"] = "True",
@@ -400,8 +258,6 @@ local flagtables = {
     ["DFFlagOptimizePartsInPart"] = "True",
     ["DFFlagDisableDPIScale"] = "True",
     ["DFFlagDebugPerfMode"] = "True",
-
-    -- Network / RakNet
     ["DFIntRaknetBandwidthInfluxHundredthsPercentageV2"] = "10000",
     ["DFIntRakNetClockDriftAdjustmentPerPingMillisecond"] = "100",
     ["DFIntRaknetBandwidthPingSendEveryXSeconds"] = "1",
@@ -416,8 +272,6 @@ local flagtables = {
     ["DFIntRakNetMtuValue2InBytes"] = "1240",
     ["DFIntRakNetMtuValue3InBytes"] = "1200",
     ["DFIntConnectionMTUSize"] = "1260",
-
-    -- Client Packet / Networking
     ["DFIntMaxReceiveToDeserializeLatencyMilliseconds"] = "15",
     ["DFIntNetworkInDeserializeLimitGameplayMsClient"] = "6",
     ["DFIntNetworkInProcessLimitGameplayMsClient"] = "6",
@@ -441,28 +295,20 @@ local flagtables = {
     ["FIntPGSAngularDampingPermilPersecond"] = "0",
     ["DFFlagPhysicsSkipNonRealTimeHumanoidForceCalc2"] = "True",
     ["FFlagDebugDisplayFPS"] = "True",
-
-    -- SignalR
     ["DFIntSignalRHubConnectionHeartbeatTimerRateMs"] = "1000",
     ["DFIntSignalRHubConnectionBaseRetryTimeMs"] = "100",
     ["DFIntSignalRCoreKeepAlivePingPeriodMs"] = "250",
     ["DFIntSignalRCoreServerTimeoutMs"] = "11100",
     ["DFIntSignalRCoreTimerMs"] = "750",
     ["DFIntSignalRCoreRpcQueueSize"] = "256",
-
-    -- Animation / Rendering
     ["DFIntAnimationLodFacsVisibilityDenominator"] = "0",
     ["DFIntAnimationLodFacsDistanceMin"] = "0",
     ["DFIntAnimationLodFacsDistanceMax"] = "0",
     ["DFIntDebugFRMQualityLevelOverride"] = "1",
     ["DFIntDebugDynamicRenderKiloPixels"] = "1100",
     ["DFIntDebugRestrictGCDistance"] = "1",
-
-    -- Wait Timers
     ["DFIntWaitOnUpdateNetworkLoopEndedMS"] = "100",
     ["DFIntWaitOnRecvFromLoopEndedMS"] = "100",
-
-    -- FInt Rendering / Graphics
     ["FIntRenderMaxShadowAtlasUsageBeforeDownscale"] = "80",
     ["FIntRenderShadowMapDepthCacheMemLimit"] = "192",
     ["FIntUITextureMaxRenderTextureSize"] = "1024",
@@ -482,8 +328,6 @@ local flagtables = {
     ["FIntTelemetryProfilerFrequency"] = "0",
     ["FIntRenderLocalLightFadeInMs"] = "0",
     ["FIntReportDeviceInfoRollout"] = "0",
-
-    -- FFlags
     ["FFlagRenderAllocateShadowMapResourcesOnDemand"] = "True",
     ["FFlagSpecifyNetworkReplicatorScopeForItems"] = "True",
     ["FFlagTaskSchedulerLimitTargetFpsTo2402"] = "False",
@@ -508,74 +352,79 @@ local flagtables = {
 }
 
 local function formatFlag(z)
-    z = z:gsub("^DFInt", "")
-    z = z:gsub("^DFFlag", "")
-    z = z:gsub("^FFlag", "")
-    z = z:gsub("^FInt", "")
-    z = z:gsub("FString", "")
-    z = z:gsub("FLog", "")
+    z = z:gsub("^DFInt", ""):gsub("^DFFlag", ""):gsub("^FFlag", ""):gsub("^FInt", ""):gsub("FString", ""):gsub("FLog", "")
     return z
 end
 
 local function InitFFlags()
     if not Settings.Performance.EnableFFlags then return end
-
     if not setfflag then
-        ShowNotification("FFlags Optimizer", "Клиент не поддерживает setfflag. Оптимизация FFlags пропущена.", 5)
+        ConsoleLog("Кривой клиент: функция setfflag отсутствует.")
         return
     end
 
-    ShowNotification("Совместимость", "Применение оптимизации FFlags в фоне...", 5)
-
     task.spawn(function()
+        ConsoleLog("Начало инъекции FFlags...")
         local start = os.clock()
-        local injectedCount = 0
-
+        local count = 0
         for k, v in pairs(flagtables) do
-            -- Безопасная задержка для предотвращения фризов и вылетов при инжекте
-            for i = 1, 5 do RunService.RenderStepped:Wait() end
-
             pcall(function()
                 local formatted = formatFlag(k)
                 if getfflag(formatted) then
                     setfflag(formatted, v)
-                    injectedCount = injectedCount + 1
+                    count = count + 1
                 elseif getfflag(k) then
                     setfflag(k, v)
-                    injectedCount = injectedCount + 1
+                    count = count + 1
                 end
             end)
         end
-
-        local elapsed = string.format("%.2f", os.clock() - start)
-        ShowNotification("Успешно", "Загружено " .. injectedCount .. " оптимизаций FFlags за " .. elapsed .. "сек.", 5)
-
-        print("╔════════════════════════════════════════╗")
-        print("║          PERFORMANCE OVERHAUL          ║")
-        print("║   FFlags Set   → " .. string.format("%02d", injectedCount) .. " flags")
-        print("║   Time Taken   → " .. elapsed .. "s")
-        print("╚════════════════════════════════════════╝")
+        ConsoleLog(string.format("Успешно инжектировано %d FFlags за %.2f сек.", count, os.clock() - start))
     end)
 end
 
--- ╔══════════════════════════════════════════════════════════╗
--- ║         2. МОДУЛЬ: СВЕТ (FULLBRIGHT С КОНТРАСТОМ)        ║
--- ╚══════════════════════════════════════════════════════════╝
-local function InitLightingOptimizer()
-    if not Settings.Lighting.Enabled then return end
+-- Оптимизатор материалов и удаление тумана/атмосферы
+local function InitOptimizerAndLighting()
+    local function OptimizeObject(obj)
+        pcall(function()
+            if Settings.Performance.OptimizeMap then
+                if obj:IsA("Decal") or obj:IsA("Texture") then
+                    obj:Destroy()
+                elseif obj:IsA("BasePart") or obj:IsA("MeshPart") or obj:IsA("UnionOperation") then
+                    obj.Material = Enum.Material.SmoothPlastic
+                    obj.Reflectance = 0
+                    if obj:IsA("MeshPart") then
+                        obj.TextureID = ""
+                    end
+                end
+            end
+            if Settings.Performance.DisableParticles and (obj:IsA("ParticleEmitter") or obj:IsA("Trail")) then
+                obj.Enabled = false
+            end
+        end)
+    end
 
-    local function UpdateLighting()
+    if Settings.Performance.OptimizeMap then
+        for _, obj in ipairs(workspace:GetDescendants()) do
+            OptimizeObject(obj)
+        end
+        local conn = workspace.DescendantAdded:Connect(OptimizeObject)
+        SharedState.AddConnection(conn)
+    end
+
+    -- Настройки света (Fullbright + Сохранение Контраста)
+    local function ApplyLighting()
         pcall(function()
             local Lighting = game:GetService("Lighting")
             if Settings.Lighting.Fullbright then
                 Lighting.Brightness = 2
                 Lighting.ClockTime = 14
-                Lighting.GlobalShadows = not Settings.Lighting.ContrastPreserve -- Выключаем тени только если не нужен контраст
+                Lighting.GlobalShadows = not Settings.Lighting.ContrastPreserve
 
                 if Settings.Lighting.ContrastPreserve then
-                    -- Мягкий рассеянный свет с сохранением глубины теней
-                    Lighting.Ambient = Color3.fromRGB(130, 130, 140)
-                    Lighting.OutdoorAmbient = Color3.fromRGB(150, 150, 160)
+                    -- Сохранение глубины: стены не будут абсолютно одинаково плоскими
+                    Lighting.Ambient = Color3.fromRGB(135, 135, 145)
+                    Lighting.OutdoorAmbient = Color3.fromRGB(155, 155, 165)
                 else
                     Lighting.Ambient = Color3.fromRGB(255, 255, 255)
                     Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
@@ -592,172 +441,143 @@ local function InitLightingOptimizer()
         end)
     end
 
-    UpdateLighting()
-    local conn = game:GetService("Lighting").ChildAdded:Connect(function(child)
+    ApplyLighting()
+    local connL = game:GetService("Lighting").ChildAdded:Connect(function()
         task.wait(0.1)
-        UpdateLighting()
+        ApplyLighting()
+    end)
+    SharedState.AddConnection(connL)
+    ConsoleLog("Оптимизация освещения и карты применена.")
+end
+
+-- Камера стретч трюк
+local function InitCameraStretch()
+    local conn = RunService.RenderStepped:Connect(function()
+        if Camera and Settings.Performance.StretchedResolution < 1.0 then
+            pcall(function()
+                Camera.CFrame = Camera.CFrame * CFrame.new(0, 0, 0, 1, 0, 0, 0, Settings.Performance.StretchedResolution, 0, 0, 0, 1)
+            end)
+        end
     end)
     SharedState.AddConnection(conn)
-
-    ShowNotification("Свечение", "Fullbright & Atmosphere Cleaner запущен. Видимость 100%.", 4)
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
--- ║        3. МОДУЛЬ: СТРЕТЧ И АНТИЛАГ КАРТЫ (OPTIMIZER)     ║
--- ╚══════════════════════════════════════════════════════════╝
-local function InitOptimizerAndStretch()
-    -- Удаление и сброс материалов на карте
-    if Settings.Performance.OptimizeMap then
-        local function OptimizeObject(obj)
+-- ║         2. МОДУЛЬ КАМЕРЫ (SHIFT LOCK, ZERO SHAKE)        ║
+-- ╚══════════════════════════════════════════════════════════╗
+local function InitCameraComfort()
+    -- Zero Cam Shake
+    local connShake = RunService.RenderStepped:Connect(function()
+        if Settings.Comfort.ZeroCamShake then
             pcall(function()
-                if obj:IsA("Decal") or obj:IsA("Texture") then
-                    obj:Destroy()
-                elseif obj:IsA("BasePart") or obj:IsA("MeshPart") or obj:IsA("UnionOperation") then
-                    obj.Material = Enum.Material.SmoothPlastic
-                    obj.Reflectance = 0
-                    if obj:IsA("MeshPart") then
-                        obj.TextureID = ""
-                    end
-                end
-                if Settings.Performance.DisableParticles and (obj:IsA("ParticleEmitter") or obj:IsA("Trail")) then
-                    obj.Enabled = false
+                local char = player.Character
+                local hum = char and char:FindFirstChildOfClass("Humanoid")
+                if hum then
+                    hum.CameraOffset = Vector3.new(0, 0, 0)
                 end
             end)
         end
-
-        for _, obj in ipairs(workspace:GetDescendants()) do
-            OptimizeObject(obj)
-        end
-
-        local mapConnection = workspace.DescendantAdded:Connect(OptimizeObject)
-        SharedState.AddConnection(mapConnection)
-
-        ShowNotification("Оптимизация", "Тяжелые текстуры удалены, шейдеры заменены на SmoothPlastic.", 4)
-    end
-
-    -- Трюк растяжения разрешения (Stretched Camera Trick)
-    if Settings.Screen.StretchedResolution and Settings.Screen.StretchedResolution < 1.0 then
-        local stretchedConn = RunService.RenderStepped:Connect(function()
-            if Camera then
-                pcall(function()
-                    Camera.CFrame = Camera.CFrame * CFrame.new(0, 0, 0, 1, 0, 0, 0, Settings.Screen.StretchedResolution, 0, 0, 0, 1)
-                end)
-            end
-        end)
-        SharedState.AddConnection(stretchedConn)
-
-        ShowNotification("Экран", "Установлено кастомное растяжение экрана: " .. Settings.Screen.StretchedResolution, 4)
-    end
-end
-
--- ╔══════════════════════════════════════════════════════════╗
--- ║        4. МОДУЛЬ: КАМЕРА (КОМФОРТ, SHIFT-SHIFT, БОББИНГ)  ║
--- ╚══════════════════════════════════════════════════════════╝
--- Zero Cam Shake (Отключение тряски)
-local function InitZeroCamShake()
-    if not Settings.CameraComfort.ZeroCamShake then return end
-
-    local conn = RunService.RenderStepped:Connect(function()
-        local char = player.Character
-        if char then
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if hum then
-                hum.CameraOffset = Vector3.new(0, 0, 0)
-            end
-        end
     end)
-    SharedState.AddConnection(conn)
-end
+    SharedState.AddConnection(connShake)
 
--- Custom ShiftLock / Shoulder Shift (Смена плеча камеры)
-local function InitShiftLock()
-    if not Settings.CameraComfort.ShiftLockEnabled then return end
-
-    local UserInputService = game:GetService("UserInputService")
+    -- Custom ShiftLock / Shoulder Shift
     local shiftLockActive = false
-    local shiftOffset = Vector3.new(2, 0.5, 0) -- Смещение плеча
+    local shiftOffset = Vector3.new(2, 0.5, 0)
 
     local inputConn = UserInputService.InputBegan:Connect(function(input, processed)
         if processed then return end
-        if input.KeyCode == Settings.CameraComfort.ShiftLockKey then
+        if Settings.Comfort.ShiftLock and input.KeyCode == Enum.KeyCode[Settings.Comfort.ShiftLockKey] then
             shiftLockActive = not shiftLockActive
             UserInputService.MouseBehavior = shiftLockActive and Enum.MouseBehavior.LockCenter or Enum.MouseBehavior.Default
-            ShowNotification("ShiftLock", "Кастомный ShiftLock: " .. (shiftLockActive and "ВКЛ" or "ВЫКЛ"), 2)
+            Library:Notify({
+                Title = "ShiftLock",
+                Description = "Кастомный ShiftLock: " .. (shiftLockActive and "АКТИВЕН" or "ВЫКЛЮЧЕН"),
+                Time = 2,
+            })
         end
     end)
     SharedState.AddConnection(inputConn)
 
     local renderConn = RunService.RenderStepped:Connect(function()
-        if shiftLockActive then
+        if Settings.Comfort.ShiftLock and shiftLockActive then
             UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
             local char = player.Character
             local hrp = char and char:FindFirstChild("HumanoidRootPart")
             if hrp then
-                -- Поворачиваем персонажа в сторону взгляда камеры
                 local camLook = Camera.CFrame.LookVector
                 local flatLook = Vector3.new(camLook.X, 0, camLook.Z).Unit
-                hrp.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + flatLook)
+                pcall(function()
+                    hrp.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + flatLook)
+                end)
             end
-            -- Применяем смещение плеча
             Camera.CFrame = Camera.CFrame * CFrame.new(shiftOffset)
         end
     end)
     SharedState.AddConnection(renderConn)
+    ConsoleLog("Модули комфорта и кастомного ShiftLock подключены.")
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
--- ║         5. МОДУЛЬ: ПРИЦЕЛ (RAISED CROSSHAIR)             ║
--- ╚══════════════════════════════════════════════════════════╝
+-- ║         3. МОДУЛЬ ПРИЦЕЛА (IMG_0_PK.PNG С FALLBACK)      ║
+-- ╚══════════════════════════════════════════════════════════╗
 local function InitRaisedCrosshair()
     if not Settings.Crosshair.Enabled then return end
 
-    local crosshairDot = CreateDrawing("Circle")
-    crosshairDot.Radius = 2
-    crosshairDot.Filled = true
-    crosshairDot.Color = Settings.Crosshair.Color
-    crosshairDot.Visible = true
+    -- Попытка создать прицел на основе текстуры img_0_pk.png
+    local crosshairImg
+    local isCustom = false
 
-    local lines = {}
-    for i = 1, 4 do
-        local line = CreateDrawing("Line")
-        line.Color = Settings.Crosshair.Color
-        line.Thickness = 1.5
-        line.Visible = true
-        table.insert(lines, line)
+    pcall(function()
+        crosshairImg = CreateDrawing("Image")
+        if isfile and isfile("img_0_pk.png") and readfile then
+            crosshairImg.Data = readfile("img_0_pk.png")
+            isCustom = true
+        else
+            -- Загружаем резервный онлайн-прицел напрямую
+            crosshairImg.Data = game:HttpGet("https://raw.githubusercontent.com/Mediasama/Huesos/main/img_0_pk.png")
+            isCustom = true
+        end
+        crosshairImg.Size = Vector2.new(32, 32)
+        crosshairImg.Visible = true
+    end)
+
+    -- Fallback на векторный прицел в мятном стиле, если рисование изображения не поддерживается
+    local vectorLines = {}
+    if not isCustom then
+        ConsoleLog("Текстура img_0_pk.png не поддерживается. Переключение на векторный fallback.")
+        for i = 1, 4 do
+            local line = CreateDrawing("Line")
+            line.Color = Color3.fromRGB(150, 255, 200)
+            line.Thickness = 1.5
+            line.Visible = true
+            table.insert(vectorLines, line)
+        end
     end
 
     local conn = RunService.RenderStepped:Connect(function()
         local vpSize = Camera.ViewportSize
         local center = Vector2.new(vpSize.X / 2, vpSize.Y / 2)
-        -- Сдвигаем центр вверх на указанную величину
         local targetCenter = center + Vector2.new(0, Settings.Crosshair.VerticalOffset)
 
-        crosshairDot.Position = targetCenter
-
-        local size = Settings.Crosshair.Size
-        local gap = Settings.Crosshair.Gap
-
-        -- Top Line
-        lines[1].From = targetCenter - Vector2.new(0, gap)
-        lines[1].To = targetCenter - Vector2.new(0, gap + size)
-
-        -- Bottom Line
-        lines[2].From = targetCenter + Vector2.new(0, gap)
-        lines[2].To = targetCenter + Vector2.new(0, gap + size)
-
-        -- Left Line
-        lines[3].From = targetCenter - Vector2.new(gap, 0)
-        lines[3].To = targetCenter - Vector2.new(gap + size, 0)
-
-        -- Right Line
-        lines[4].From = targetCenter + Vector2.new(gap, 0)
-        lines[4].To = targetCenter + Vector2.new(gap + size, 0)
+        if isCustom and crosshairImg then
+            crosshairImg.Position = targetCenter - Vector2.new(16, 16)
+        elseif #vectorLines == 4 then
+            local size, gap = 8, 4
+            vectorLines[1].From = targetCenter - Vector2.new(0, gap)
+            vectorLines[1].To = targetCenter - Vector2.new(0, gap + size)
+            vectorLines[2].From = targetCenter + Vector2.new(0, gap)
+            vectorLines[2].To = targetCenter + Vector2.new(0, gap + size)
+            vectorLines[3].From = targetCenter - Vector2.new(gap, 0)
+            vectorLines[3].To = targetCenter - Vector2.new(gap + size, 0)
+            vectorLines[4].From = targetCenter + Vector2.new(gap, 0)
+            vectorLines[4].To = targetCenter + Vector2.new(gap + size, 0)
+        end
     end)
     SharedState.AddConnection(conn)
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
--- ║         6. МОДУЛЬ: КРУГ ДИСТАНЦИИ ПРЫЖКА (JUMP RADIUS)   ║
+-- ║         4. МОДУЛЬ КРУГА ДИСТАНЦИИ ПРЫЖКА (JUMP RADIUS)   ║
 -- ╚══════════════════════════════════════════════════════════╝
 local function InitJumpDistanceRadius()
     if not Settings.JumpRadius.Enabled then return end
@@ -798,9 +618,8 @@ local function InitJumpDistanceRadius()
             local offset = Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
             local targetPos = hrp.Position + offset
 
-            -- Проекция на землю с помощью Raycast
             local ray = workspace:Raycast(targetPos + Vector3.new(0, 5, 0), Vector3.new(0, -25, 0), rayparams)
-            local groundY = ray and ray.Position.Y or (hrp.Position.Y - 3) -- Запасной вариант
+            local groundY = ray and ray.Position.Y or (hrp.Position.Y - 3)
 
             table.insert(points, Vector3.new(targetPos.X, groundY, targetPos.Z))
         end
@@ -826,25 +645,24 @@ local function InitJumpDistanceRadius()
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
--- ║   7. МОДУЛЬ: ПРОЗРАЧНОСТЬ, АУРА И КАМЕРА БЕЗ КОЛЛИЗИИ    ║
+-- ║         5. МОДУЛЬ ПЕРСОНАЖА (100% TRANSPARENCY & AURA)   ║
 -- ╚══════════════════════════════════════════════════════════╝
-local function InitTransparentAuraNoCollision()
-    if not Settings.CharacterGlow.Enabled then return end
-
-    local function ApplyTransparencyAndAura(char)
+local function InitAvatarModifications()
+    local function ApplyTransparentAura(char)
         if not char then return end
 
-        -- Камера без коллизии стен (Invisicam)
+        -- Камера без коллизии стен
         pcall(function() player.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Invisicam end)
 
-        -- Прозрачность частей
-        for _, child in ipairs(char:GetDescendants()) do
-            if child:IsA("BasePart") or child:IsA("Decal") then
-                child.Transparency = Settings.CharacterGlow.Transparency
+        -- Делаем ВСЕ части персонажа полностью прозрачными
+        for _, obj in ipairs(char:GetDescendants()) do
+            if obj:IsA("BasePart") or obj:IsA("Decal") then
+                obj.Transparency = Settings.Character.Transparent and 1.0 or 0.0
             end
         end
 
-        -- Создаем светящуюся сферу ауры в HRP
+        if not Settings.Character.Aura then return end
+
         local hrp = char:WaitForChild("HumanoidRootPart", 5)
         if hrp then
             local aura = Instance.new("Part")
@@ -852,124 +670,91 @@ local function InitTransparentAuraNoCollision()
             aura.Shape = Enum.PartType.Ball
             aura.Size = Vector3.new(3, 3, 3)
             aura.Material = Enum.Material.Neon
-            aura.Color = Settings.CharacterGlow.AuraColor
-            aura.Transparency = 0.4
+            aura.Color = Settings.Character.AuraColor
+            aura.Transparency = 0.5
             aura.CanCollide = false
-            aura.Anchored = false
             aura.Parent = char
             SharedState.AddInstance(aura)
 
             local weld = Instance.new("Weld")
             weld.Part0 = hrp
             weld.Part1 = aura
-            weld.C0 = CFrame.new()
-            weld.C1 = CFrame.new()
             weld.Parent = aura
 
-            -- Всегда видимая сквозь стены подсветка
+            -- Тонкая обводка, видимая через стены
             local sBox = Instance.new("SelectionBox")
             sBox.Name = "AuraGlowBox"
             sBox.Adornee = aura
-            sBox.Color3 = Settings.CharacterGlow.AuraColor
+            sBox.Color3 = Settings.Character.AuraColor
             sBox.LineThickness = 0.05
-            sBox.Transparency = 0.1
             sBox.Parent = aura
             SharedState.AddInstance(sBox)
         end
     end
 
-    if player.Character then ApplyTransparencyAndAura(player.Character) end
-    local conn = player.CharacterAdded:Connect(ApplyTransparencyAndAura)
+    if player.Character then ApplyTransparentAura(player.Character) end
+    local conn = player.CharacterAdded:Connect(ApplyTransparentAura)
     SharedState.AddConnection(conn)
+    ConsoleLog("Эффект полной прозрачности и ауры игрока применен.")
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
--- ║         8. МОДУЛЬ: ПРЕДСКАЗАНИЕ ДВИЖЕНИЯ (PREDICTION)    ║
+-- ║         6. МОДУЛЬ ПРЕДСКАЗАНИЯ ДВИЖЕНИЯ (TRAJECTORY)     ║
 -- ╚══════════════════════════════════════════════════════════╝
 local function InitPrediction()
     if not Settings.Prediction.Enabled then return end
 
-    local v2 = Vector2.new
-    local v3 = Vector3.new
-    local cf = CFrame.new
-    local rad = math.rad
-    local cos = math.cos
-    local sin = math.sin
-    local abs = math.abs
-    local pi = math.pi
-    local clamp = math.clamp
-    local floor = math.floor
-    local max = math.max
-    local min = math.min
-    local sqrt = math.sqrt
-    local huge = math.huge
-    local insert = table.insert
-    local remove = table.remove
-    local rgb = Color3.fromRGB
-
     local lastlanding = nil
     local isairborne = false
-    local lastmoveinput = v3(0, 0, 1)
+    local lastmoveinput = Vector3.new(0, 0, 1)
     local cameraturnspeed = 0
     local lastcameracf = Camera.CFrame
     local pulsetime = 0
 
-    -- Создание элементов рисования
     local preddot = CreateDrawing("Circle")
     preddot.Radius = 6
     preddot.Filled = true
-    preddot.Color = Settings.Prediction.PredictDotColor
+    preddot.Color = Settings.Prediction.PredictDotColor or Color3.fromRGB(0, 255, 255)
     preddot.Visible = false
-    preddot.Transparency = 1
     preddot.NumSides = 32
 
     local landdot = CreateDrawing("Circle")
     landdot.Radius = 12
     landdot.Filled = true
-    landdot.Color = Settings.Prediction.LandDotColor
+    landdot.Color = Settings.Prediction.LandDotColor or Color3.fromRGB(255, 100, 100)
     landdot.Visible = false
-    landdot.Transparency = 1
     landdot.NumSides = 32
 
     local landoutline = CreateDrawing("Circle")
     landoutline.Radius = 18
     landoutline.Filled = false
-    landoutline.Color = Settings.Prediction.LandOutlineColor
+    landoutline.Color = Settings.Prediction.LandOutlineColor or Color3.fromRGB(255, 150, 150)
     landoutline.Visible = false
-    landoutline.Transparency = 1
     landoutline.Thickness = 2
     landoutline.NumSides = 32
-
-    local velline = CreateDrawing("Line")
-    velline.Color = Settings.Prediction.VelocityColor
-    velline.Thickness = 3
-    velline.Visible = false
-    velline.Transparency = 1
 
     local velcurve = {}
     for i = 1, 8 do
         local line = CreateDrawing("Line")
-        line.Color = Settings.Prediction.VelocityColor
+        line.Color = Settings.Prediction.VelocityColor or Color3.fromRGB(0, 255, 0)
         line.Thickness = 3
         line.Visible = false
-        line.Transparency = 1
         velcurve[i] = line
     end
 
     local arclines = {}
     for i = 1, 29 do
         local line = CreateDrawing("Line")
-        line.Color = Settings.Prediction.TrajectoryColor
+        line.Color = Settings.Prediction.TrajectoryColor or Color3.fromRGB(255, 240, 140)
         line.Thickness = 2
         line.Visible = false
-        line.Transparency = 1
         arclines[i] = line
     end
 
     local prejumplines = {}
     for i = 1, 29 do
         local line = CreateDrawing("Line")
-        line.Color = Settings.Prediction.PreJumpColor
+        line.Color = Settings.Prediction.PreJumpColor or Color3.fromRGB(100, 200, 255)
         line.Thickness = 2
         line.Visible = false
         line.Transparency = 0.7
@@ -979,20 +764,18 @@ local function InitPrediction()
     local prejumplanddot = CreateDrawing("Circle")
     prejumplanddot.Radius = 10
     prejumplanddot.Filled = true
-    prejumplanddot.Color = Settings.Prediction.PreJumpColor
+    prejumplanddot.Color = Settings.Prediction.PreJumpColor or Color3.fromRGB(100, 200, 255)
     prejumplanddot.Visible = false
-    prejumplanddot.Transparency = 0.7
     prejumplanddot.NumSides = 32
 
     local function predictpos(p0, v0, t)
         local grav = workspace.Gravity
-        return p0 + v0 * t + v3(0, -grav, 0) * 0.5 * t * t
+        return p0 + v0 * t + Vector3.new(0, -grav, 0) * 0.5 * t * t
     end
 
     local function toscreen(pos)
-        if not Camera then return v2(0, 0), false end
         local screenpos, onscreen = Camera:WorldToViewportPoint(pos)
-        return v2(screenpos.X, screenpos.Y), onscreen
+        return Vector2.new(screenpos.X, screenpos.Y), onscreen
     end
 
     local function isvisible(pos)
@@ -1001,15 +784,10 @@ local function InitPrediction()
         local rayparams = RaycastParams.new()
         rayparams.FilterDescendantsInstances = {char}
         rayparams.FilterType = Enum.RaycastFilterType.Exclude
-
         local campos = Camera.CFrame.Position
         local dir = pos - campos
-        local distance = dir.Magnitude
-
-        if distance < 2 then return true end
-
         local ray = workspace:Raycast(campos, dir, rayparams)
-        if ray and (ray.Position - campos).Magnitude < distance - 2 then
+        if ray and (ray.Position - campos).Magnitude < dir.Magnitude - 2 then
             return false
         end
         return true
@@ -1021,8 +799,7 @@ local function InitPrediction()
         local rayparams = RaycastParams.new()
         rayparams.FilterDescendantsInstances = {char}
         rayparams.FilterType = Enum.RaycastFilterType.Exclude
-
-        local ray = workspace:Raycast(hrp.Position, v3(0, -3, 0), rayparams)
+        local ray = workspace:Raycast(hrp.Position, Vector3.new(0, -3, 0), rayparams)
         return ray ~= nil
     end
 
@@ -1031,56 +808,28 @@ local function InitPrediction()
         local positions = {}
         local prev = p0
         local landed = nil
-
         local rayparams = RaycastParams.new()
-        if char then
-            rayparams.FilterDescendantsInstances = {char}
-        end
+        if char then rayparams.FilterDescendantsInstances = {char} end
         rayparams.FilterType = Enum.RaycastFilterType.Exclude
 
         for t = 0, 2.5, 0.03 do
             local pos = predictpos(p0, v0, t)
-            insert(positions, pos)
-
+            table.insert(positions, pos)
             local dir = pos - prev
             if dir.Magnitude > 0.01 then
                 local ray = workspace:Raycast(prev, dir, rayparams)
-                if ray then
-                    landed = ray.Position
-                    break
-                end
+                if ray then landed = ray.Position break end
             end
             prev = pos
-        end
-
-        if not landed and #positions > 0 then
-            local last = positions[#positions]
-            local down = workspace:Raycast(last + v3(0, 1, 0), v3(0, -5000, 0), rayparams)
-            if down then
-                landed = down.Position
-            end
         end
         return positions, landed
     end
 
-    -- Переключение траектории кнопкой 'H'
-    local inputConnection = game:GetService("UserInputService").InputBegan:Connect(function(input, processed)
-        if processed then return end
-        if input.KeyCode == Enum.KeyCode.H then
-            Settings.Prediction.PreJumpEnabled = not Settings.Prediction.PreJumpEnabled
-            ShowNotification("Траектория", "Показ арки прыжка: " .. (Settings.Prediction.PreJumpEnabled and "ВКЛЮЧЕН" or "ВЫКЛЮЧЕН"), 3)
-        end
-    end)
-    SharedState.AddConnection(inputConnection)
-
-    local renderConnection = RunService.RenderStepped:Connect(function(dt)
+    local conn = RunService.RenderStepped:Connect(function(dt)
         pulsetime = pulsetime + dt
-
         local char = player.Character
-        if not char or not char.Parent then return end
-
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-        local hum = char:FindFirstChild("Humanoid")
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        local hum = char and char:FindFirstChild("Humanoid")
         if not hrp or not hum then return end
 
         local p0 = hrp.Position
@@ -1090,21 +839,12 @@ local function InitPrediction()
         local currentcf = Camera.CFrame
         local relativecf = lastcameracf:Inverse() * currentcf
         local _, yaw, _ = relativecf:ToEulerAnglesXYZ()
-        local turndir = yaw / max(dt, 0.001)
+        local turndir = yaw / math.max(dt, 0.001)
 
         cameraturnspeed = cameraturnspeed * 0.7 + turndir * 0.3
         lastcameracf = currentcf
 
-        local wasairborne = isairborne
         isairborne = not grounded and v0.Y < -5
-
-        if not wasairborne and isairborne then
-            lastlanding = nil
-        end
-
-        if isairborne and grounded then
-            lastlanding = nil
-        end
 
         local pred3 = predictpos(p0, v0, 0.25)
         local pred2, predon = toscreen(pred3)
@@ -1113,9 +853,8 @@ local function InitPrediction()
 
         if v0.Magnitude > 1 then
             local curvature = -cameraturnspeed * 0.8
-            local vellength = min(v0.Magnitude * 0.5, 20)
+            local vellength = math.min(v0.Magnitude * 0.5, 20)
             local segments = 8
-
             for i = 1, segments do
                 local t0 = (i - 1) / segments
                 local t1 = i / segments
@@ -1124,48 +863,32 @@ local function InitPrediction()
                 local curve0 = curvature * offset0 * offset0 * 0.06
                 local curve1 = curvature * offset1 * offset1 * 0.06
                 local dir = v0.Unit
-                local up = v3(0, 1, 0)
-                local right = dir:Cross(up).Unit
+                local right = dir:Cross(Vector3.new(0, 1, 0)).Unit
                 local pos0 = p0 + dir * offset0 + right * curve0
                 local pos1 = p0 + dir * offset1 + right * curve1
                 local start2, starton = toscreen(pos0)
                 local end2, endon = toscreen(pos1)
-                local visible0 = isvisible(pos0)
-                local visible1 = isvisible(pos1)
                 velcurve[i].From = start2
                 velcurve[i].To = end2
-                velcurve[i].Visible = starton and endon and visible0 and visible1
+                velcurve[i].Visible = starton and endon and isvisible(pos0) and isvisible(pos1)
             end
-            velline.Visible = false
         else
-            velline.Visible = false
-            for i = 1, 8 do
-                velcurve[i].Visible = false
-            end
+            for i = 1, 8 do velcurve[i].Visible = false end
         end
 
         local positions, landing = simulate(p0, v0)
         if #positions > 1 then
             for i = 1, 29 do
-                local idx1 = floor((i - 1) * (#positions - 1) / 29) + 1
-                local idx2 = floor(i * (#positions - 1) / 29) + 1
-                idx1 = clamp(idx1, 1, #positions)
-                idx2 = clamp(idx2, 1, #positions)
-                local pos1 = positions[idx1]
-                local pos2 = positions[idx2]
-                local s1, on1 = toscreen(pos1)
-                local s2, on2 = toscreen(pos2)
-                local midpoint = (pos1 + pos2) * 0.5
-                local visible = isvisible(midpoint)
-
+                local idx1 = math.floor((i - 1) * (#positions - 1) / 29) + 1
+                local idx2 = math.floor(i * (#positions - 1) / 29) + 1
+                local s1, on1 = toscreen(positions[idx1])
+                local s2, on2 = toscreen(positions[idx2])
                 arclines[i].From = s1
                 arclines[i].To = s2
-                arclines[i].Visible = on1 and on2 and visible
+                arclines[i].Visible = on1 and on2 and isvisible((positions[idx1] + positions[idx2]) * 0.5)
             end
         else
-            for i = 1, 29 do
-                arclines[i].Visible = false
-            end
+            for i = 1, 29 do arclines[i].Visible = false end
         end
 
         if isairborne and landing then
@@ -1174,14 +897,12 @@ local function InitPrediction()
 
         if lastlanding and isairborne then
             local land2, landon = toscreen(lastlanding)
-
             landdot.Position = land2
             landdot.Visible = landon and isvisible(lastlanding)
 
-            local pulse = abs(sin(pulsetime * 3))
+            local pulse = math.abs(math.sin(pulsetime * 3))
             landoutline.Position = land2
             landoutline.Radius = 18 + pulse * 8
-            landoutline.Transparency = 0.3 + pulse * 0.7
             landoutline.Visible = landon and isvisible(lastlanding)
         else
             landdot.Visible = false
@@ -1189,92 +910,46 @@ local function InitPrediction()
         end
 
         if Settings.Prediction.PreJumpEnabled and not isairborne then
-            local camlook = Camera.CFrame.LookVector
-            local camright = Camera.CFrame.RightVector
-
-            local inputservice = game:GetService("UserInputService")
-            local movevec = v3(0, 0, 0)
-
-            if inputservice:IsKeyDown(Enum.KeyCode.W) then
-                movevec = movevec + v3(camlook.X, 0, camlook.Z).Unit
-            end
-            if inputservice:IsKeyDown(Enum.KeyCode.S) then
-                movevec = movevec - v3(camlook.X, 0, camlook.Z).Unit
-            end
-            if inputservice:IsKeyDown(Enum.KeyCode.A) then
-                movevec = movevec - v3(camright.X, 0, camright.Z).Unit
-            end
-            if inputservice:IsKeyDown(Enum.KeyCode.D) then
-                movevec = movevec + v3(camright.X, 0, camright.Z).Unit
-            end
-
-            if movevec.Magnitude > 0.1 then
-                lastmoveinput = movevec.Unit
-            end
-
             local walkspeed = hum.WalkSpeed or 16
             local futurevel = lastmoveinput * walkspeed
-
-            local jumpvel = futurevel + v3(0, 50, 0)
+            local jumpvel = futurevel + Vector3.new(0, 50, 0)
             local prejumppositions, prejumplanding = simulate(p0, jumpvel)
 
             if #prejumppositions > 1 then
                 for i = 1, 29 do
-                    local idx1 = floor((i - 1) * (#prejumppositions - 1) / 29) + 1
-                    local idx2 = floor(i * (#prejumppositions - 1) / 29) + 1
-                    idx1 = clamp(idx1, 1, #prejumppositions)
-                    idx2 = clamp(idx2, 1, #prejumppositions)
-
-                    local pos1 = prejumppositions[idx1]
-                    local pos2 = prejumppositions[idx2]
-
-                    local s1, on1 = toscreen(pos1)
-                    local s2, on2 = toscreen(pos2)
-
-                    local midpoint = (pos1 + pos2) * 0.5
-                    local visible = isvisible(midpoint)
-
+                    local idx1 = math.floor((i - 1) * (#prejumppositions - 1) / 29) + 1
+                    local idx2 = math.floor(i * (#prejumppositions - 1) / 29) + 1
+                    local s1, on1 = toscreen(prejumppositions[idx1])
+                    local s2, on2 = toscreen(prejumppositions[idx2])
                     prejumplines[i].From = s1
                     prejumplines[i].To = s2
-                    prejumplines[i].Visible = on1 and on2 and visible
+                    prejumplines[i].Visible = on1 and on2 and isvisible((prejumppositions[idx1] + prejumppositions[idx2]) * 0.5)
                 end
             else
-                for i = 1, 29 do
-                    prejumplines[i].Visible = false
-                end
+                for i = 1, 29 do prejumplines[i].Visible = false end
             end
 
             if prejumplanding then
                 local preland2, prelandon = toscreen(prejumplanding)
-
                 prejumplanddot.Position = preland2
                 prejumplanddot.Visible = prelandon and isvisible(prejumplanding)
             else
                 prejumplanddot.Visible = false
             end
         else
-            for i = 1, 29 do
-                prejumplines[i].Visible = false
-            end
+            for i = 1, 29 do prejumplines[i].Visible = false end
             prejumplanddot.Visible = false
         end
     end)
-    SharedState.AddConnection(renderConnection)
-
-    print("\n[PREDICTION] Запущено:")
-    print("Голубой круг = прогнозируемая позиция")
-    print("Желтый = траектория движения")
-    print("Зеленый = вектор скорости")
-    print("Красный = точка приземления")
-    print("Нажмите клавишу 'H' для вывода симуляции прыжка")
+    SharedState.AddConnection(conn)
+    ConsoleLog("Модуль прогнозирования траектории запущен.")
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
--- ║        9. МОДУЛЬ: ПОДСВЕТКА ИНТЕРАКТИВОВ (SMART GLOW)    ║
+-- ║         7. МОДУЛЬ ПОДСВЕТКИ SMART GLOW (ESP)             ║
 -- ╚══════════════════════════════════════════════════════════╝
 local function InitSmartGlow()
     if not Settings.SmartGlow.Enabled then return end
-
     local processed = {}
 
     local function CreateVisual(target, color)
@@ -1288,64 +963,57 @@ local function InitSmartGlow()
         box.Color3 = color
         box.SurfaceColor3 = color
         box.SurfaceTransparency = 0.92
-        box.Transparency = Settings.SmartGlow.Transparency
+        box.Transparency = 0.8
         box.Parent = target
         SharedState.AddInstance(box)
 
-        -- Плавная бесконечная анимация пульсации
-        local info = TweenInfo.new(Settings.SmartGlow.PulseSpeed, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
-        local tween = TweenService:Create(box, info, {Transparency = 0.4, SurfaceTransparency = 0.98})
-        tween:Play()
+        local info = TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
+        TweenService:Create(box, info, {Transparency = 0.4, SurfaceTransparency = 0.98}):Play()
     end
 
     local function Analyze(obj)
         if not obj then return end
-
         local name = obj.Name:lower()
-        local isSuspiciousName = false
+        local isSuspicious = false
+        local keywords = {"prompt", "proximity", "touch", "interact", "trigger"}
 
-        for _, key in ipairs(Settings.SmartGlow.Keywords) do
-            if name:find(key) then
-                isSuspiciousName = true
-                break
-            end
+        for _, key in ipairs(keywords) do
+            if name:find(key) then isSuspicious = true break end
         end
 
-        if isSuspiciousName and (obj:IsA("Folder") or obj:IsA("Model")) then
+        if isSuspicious and (obj:IsA("Folder") or obj:IsA("Model")) then
             for _, child in ipairs(obj:GetChildren()) do
                 if child:IsA("Model") or child:IsA("BasePart") then
-                    CreateVisual(child, Settings.SmartGlow.FolderColor)
+                    CreateVisual(child, Color3.fromRGB(255, 170, 0))
                 end
             end
             return
         end
 
         if obj:IsA("ProximityPrompt") then
-            CreateVisual(obj.Parent, Settings.SmartGlow.SingleColor)
+            CreateVisual(obj.Parent, Color3.fromRGB(0, 255, 255))
             pcall(function()
                 obj.RequiresLineOfSight = false
                 obj.MaxActivationDistance = math.max(obj.MaxActivationDistance, 20)
             end)
         elseif obj:IsA("TouchTransmitter") or obj:IsA("ClickDetector") then
-            CreateVisual(obj.Parent, Settings.SmartGlow.SingleColor)
+            CreateVisual(obj.Parent, Color3.fromRGB(0, 255, 255))
         end
     end
 
     for _, v in ipairs(workspace:GetDescendants()) do
         task.spawn(function() pcall(Analyze, v) end)
     end
-
-    local connection = workspace.DescendantAdded:Connect(function(v)
+    local conn = workspace.DescendantAdded:Connect(function(v)
         task.wait(0.5)
         pcall(Analyze, v)
     end)
-    SharedState.AddConnection(connection)
-
-    ShowNotification("Интерактивы", "Smart Glow ESP активен. Триггеры и промпты подсвечены.", 4)
+    SharedState.AddConnection(conn)
+    ConsoleLog("Модуль Smart Glow ESP активирован.")
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
--- ║         10. МОДУЛЬ: СЕРВЕРНЫЙ ПРИЗРАК ПИНГА (SERVER POS)  ║
+-- ║         8. МОДУЛЬ СЕРВЕРНОГО ПРИЗРАКА ПИНГА (GHOST)      ║
 -- ╚══════════════════════════════════════════════════════════╝
 local function InitServerGhost()
     if not Settings.ServerGhost.Enabled then return end
@@ -1356,10 +1024,6 @@ local function InitServerGhost()
         "LeftHand","RightHand","LeftUpperLeg","RightUpperLeg",
         "LeftLowerLeg","RightLowerLeg","LeftFoot","RightFoot"
     }
-
-    local function rgb(t)
-        return Color3.fromHSV((t % 5) / 5, 1, 1)
-    end
 
     local function make_ghost(real)
         local g = Instance.new("Part")
@@ -1375,30 +1039,16 @@ local function InitServerGhost()
         local b = Instance.new("SelectionBox")
         b.Adornee = g
         b.LineThickness = 0.02
+        b.Color3 = Color3.fromRGB(150, 255, 200)
         b.Parent = g
         SharedState.AddInstance(b)
 
         return {real = real, ghost = g, box = b}
     end
 
-    local function is_replicate(p)
-        return p and not p.Anchored
-    end
-
-    local function is_owner(p)
-        return p and p.ReceiveAge == 0
-    end
-
     local function setup()
         local char = player.Character
         if not char then return end
-
-        -- Очистка старых призраков из Workspace
-        for _, o in ipairs(workspace:GetChildren()) do
-            if o:IsA("Part") and o.Name:find("_ghost$") then
-                pcall(function() o:Destroy() end)
-            end
-        end
 
         local hum = char:FindFirstChildWhichIsA("Humanoid")
         local hrp = char:FindFirstChild("HumanoidRootPart")
@@ -1417,14 +1067,10 @@ local function InitServerGhost()
         local last = os.clock()
         local acc = 0
         local frames = {}
-        local hb
 
-        hb = RunService.Heartbeat:Connect(function(dt)
-            if not hrp or not hrp.Parent or not player.Character or hrp.Parent ~= player.Character then
-                for _, g in pairs(ghosts) do
-                    if g.ghost then pcall(function() g.ghost:Destroy() end) end
-                end
-                hb:Disconnect()
+        local hb = RunService.Heartbeat:Connect(function(dt)
+            if not hrp or not hrp.Parent then
+                for _, g in pairs(ghosts) do if g.ghost then g.ghost:Destroy() end end
                 return
             end
 
@@ -1434,12 +1080,8 @@ local function InitServerGhost()
 
             local ping = player.GetNetworkPing and player:GetNetworkPing() or 0.08
 
-            if is_replicate(hrp) then
-                if is_owner(hrp) then
-                    lin_vel = hrp.AssemblyLinearVelocity
-                else
-                    lin_vel = -hrp.AssemblyLinearVelocity
-                end
+            if hrp and not hrp.Anchored then
+                lin_vel = hrp.AssemblyLinearVelocity
                 if acc >= ping then
                     server_cf = hrp.CFrame
                     acc = 0
@@ -1458,23 +1100,16 @@ local function InitServerGhost()
             end
 
             table.insert(frames, {t = now, cf = hrp_cf, pos = hrp_pos, vel = lin_vel, rel = rel})
-            if #frames > 240 then
-                for i = 1, 60 do table.remove(frames, 1) end
-            end
+            if #frames > 240 then table.remove(frames, 1) end
 
             local target_t = now - ping
             local f
-            for i = #frames, 1, -1 do
-                if frames[i].t <= target_t then
-                    f = frames[i]
-                    break
-                end
-            end
+            for i = #frames, 1, -1 do if frames[i].t <= target_t then f = frames[i] break end end
             if not f then f = frames[1] end
             if not f then return end
 
             local td = math.min(target_t - f.t, 0.06)
-            local pred_pos = f.pos + f.vel * td * Settings.ServerGhost.Strength
+            local pred_pos = f.pos + f.vel * td
             local pred_cf = CFrame.new(pred_pos) * (f.cf - f.cf.Position)
 
             for n, g in pairs(ghosts) do
@@ -1482,95 +1117,82 @@ local function InitServerGhost()
                 local box = g.box
                 local r = f.rel[n]
                 local tgt = r and pred_cf * r or (g.real and g.real.CFrame or ghost.CFrame)
-                local d = (tgt.Position - pred_cf.Position).Magnitude
-                if d > Settings.ServerGhost.MaxLimbDistance then
-                    local dir = (tgt.Position - pred_cf.Position).Unit
-                    local p = pred_cf.Position + dir * Settings.ServerGhost.MaxLimbDistance
-                    local rx, ry, rz = tgt:ToEulerAnglesXYZ()
-                    tgt = CFrame.new(p) * CFrame.Angles(rx, ry, rz)
-                end
                 ghost.CFrame = ghost.CFrame:Lerp(tgt, math.min(delta * 18, 1))
-
-                if Settings.ServerGhost.UseRGB then
-                    box.Color3 = rgb(now)
-                else
-                    box.Color3 = Settings.ServerGhost.Color
-                end
             end
         end)
         SharedState.AddConnection(hb)
     end
 
-    if player.Character then
-        task.spawn(setup)
-    end
-
-    local charAddedConn = player.CharacterAdded:Connect(function(char)
-        char:WaitForChild("HumanoidRootPart", 3)
-        task.wait(0.2)
-        setup()
-    end)
-    SharedState.AddConnection(charAddedConn)
-
-    ShowNotification("Пинг-Призрак", "Визуализация серверной позиции на основе пинга активна.", 4)
+    if player.Character then setup() end
+    local conn = player.CharacterAdded:Connect(setup)
+    SharedState.AddConnection(conn)
+    ConsoleLog("Серверный призрак пинга инициализирован.")
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
--- ║         11. МОДУЛЬ: ВЫСОКОКЛАССНЫЙ ГИРОСКОП (GYROSCOPE)  ║
+-- ║         9. ВЫСОКОКЛАССНЫЙ ГИРОСКОП С FALLBACK (SENSOR)   ║
 -- ╚══════════════════════════════════════════════════════════╝
 local function InitAdvancedGyroscope()
     if not Settings.Gyroscope.Enabled then return end
 
-    local UserInputService = game:GetService("UserInputService")
-    if not UserInputService.GyroscopeEnabled then
-        -- Попытка принудительно включить датчик гироскопа
-        pcall(function() UserInputService.GyroscopeEnabled = true end)
-    end
-
-    if not UserInputService.GyroscopeEnabled then
-        ShowNotification("Гироскоп", "Датчик гироскопа не поддерживается на вашем девайсе.", 5)
-        return
-    end
+    pcall(function() UserInputService.GyroscopeEnabled = true end)
 
     local sPrevPitch = 0
     local sPrevYaw = 0
 
     local conn = RunService.RenderStepped:Connect(function(dt)
-        local rotRate, rotSuccess = pcall(function() return UserInputService:GetDeviceRotationRate() end)
-        if not rotSuccess or not rotRate then return end
+        if not Settings.Gyroscope.Enabled then return end
 
-        -- Сырые данные с датчиков вращения (Pitch & Yaw)
-        local rawPitch = rotRate.X
-        local rawYaw = rotRate.Y
+        -- Многоуровневый алгоритм получения наклона (3 источника для 100% совместимости)
+        local rawPitch, rawYaw = 0, 0
+        local successRot, rotRate = pcall(function() return UserInputService:GetDeviceRotationRate() end)
 
-        -- 1. Физическая Мертвая Зона (Deadzone) & Компенсация дрейфа нуля
-        local pitchMag = math.abs(rawPitch)
-        local yawMag = math.abs(rawYaw)
+        if successRot and rotRate and (math.abs(rotRate.X) > 0.01 or math.abs(rotRate.Y) > 0.01) then
+            rawPitch = rotRate.X
+            rawYaw = rotRate.Y
+        else
+            -- Источник 2: DeviceRotation CFrame
+            local successCFrame, devRot = pcall(function() return UserInputService.DeviceRotation end)
+            if successCFrame and devRot then
+                local rx, ry, rz = devRot:ToEulerAnglesXYZ()
+                rawPitch = rx
+                rawYaw = ry
+            else
+                -- Источник 3: Попытка аппроксимировать по гравитационному наклону (акселерометр)
+                local successGrav, devGrav = pcall(function() return UserInputService.DeviceGravity end)
+                if successGrav and devGrav then
+                    rawPitch = devGrav.Y * 2
+                    rawYaw = devGrav.X * 2
+                end
+            end
+        end
 
-        if pitchMag < Settings.Gyroscope.Deadzone then rawPitch = 0 end
-        if yawMag < Settings.Gyroscope.Deadzone then rawYaw = 0 end
+        -- Смягчение мертвой зоны
+        if math.abs(rawPitch) < Settings.Gyroscope.Deadzone then rawPitch = 0 end
+        if math.abs(rawYaw) < Settings.Gyroscope.Deadzone then rawYaw = 0 end
 
-        -- 2. Динамический Коэффициент Alpha (Адаптивное сглаживание микротремора)
-        local alphaPitch = Settings.Gyroscope.AlphaMin + (Settings.Gyroscope.AlphaMax - Settings.Gyroscope.AlphaMin) * (1 - math.exp(-Settings.Gyroscope.AlphaSpeedCoeff * pitchMag * pitchMag))
-        local sFilteredPitch = alphaPitch * rawPitch + (1 - alphaPitch) * sPrevPitch
+        -- Фильтрация низких частот + адаптивное сглаживание микротремора
+        local magP = math.abs(rawPitch)
+        local alphaP = Settings.Gyroscope.AlphaMin + (Settings.Gyroscope.AlphaMax - Settings.Gyroscope.AlphaMin) * (1 - math.exp(-Settings.Gyroscope.AlphaSpeedCoeff * magP * magP))
+        local sFilteredPitch = alphaP * rawPitch + (1 - alphaP) * sPrevPitch
         sPrevPitch = sFilteredPitch
 
-        local alphaYaw = Settings.Gyroscope.AlphaMin + (Settings.Gyroscope.AlphaMax - Settings.Gyroscope.AlphaMin) * (1 - math.exp(-Settings.Gyroscope.AlphaSpeedCoeff * yawMag * yawMag))
-        local sFilteredYaw = alphaYaw * rawYaw + (1 - alphaYaw) * sPrevYaw
+        local magY = math.abs(rawYaw)
+        local alphaY = Settings.Gyroscope.AlphaMin + (Settings.Gyroscope.AlphaMax - Settings.Gyroscope.AlphaMin) * (1 - math.exp(-Settings.Gyroscope.AlphaSpeedCoeff * magY * magY))
+        local sFilteredYaw = alphaY * rawYaw + (1 - alphaY) * sPrevYaw
         sPrevYaw = sFilteredYaw
 
-        -- 3. Нелинейное ускорение (Acceleration Curve)
-        local speedPitch = math.abs(sFilteredPitch)
-        local accelPitch = 1 + (Settings.Gyroscope.AccelFactor * speedPitch * speedPitch) / (1 + (speedPitch / Settings.Gyroscope.AccelLimit) * (speedPitch / Settings.Gyroscope.AccelLimit))
+        -- Нелинейное прогрессивное ускорение вращения
+        local speedP = math.abs(sFilteredPitch)
+        local accelP = 1 + (Settings.Gyroscope.AccelFactor * speedP * speedP) / (1 + (speedP / Settings.Gyroscope.AccelLimit) * (speedP / Settings.Gyroscope.AccelLimit))
 
-        local speedYaw = math.abs(sFilteredYaw)
-        local accelYaw = 1 + (Settings.Gyroscope.AccelFactor * speedYaw * speedYaw) / (1 + (speedYaw / Settings.Gyroscope.AccelLimit) * (speedYaw / Settings.Gyroscope.AccelLimit))
+        local speedY = math.abs(sFilteredYaw)
+        local accelY = 1 + (Settings.Gyroscope.AccelFactor * speedY * speedY) / (1 + (speedY / Settings.Gyroscope.AccelLimit) * (speedY / Settings.Gyroscope.AccelLimit))
 
-        -- 4. Применение раздельной чувствительности (Pitch & Yaw Separation)
-        local finalPitch = sFilteredPitch * Settings.Gyroscope.PitchSensitivity * accelPitch * dt
-        local finalYaw = sFilteredYaw * Settings.Gyroscope.YawSensitivity * accelYaw * dt
+        local finalPitch = sFilteredPitch * Settings.Gyroscope.PitchSensitivity * accelP * dt
+        local finalYaw = sFilteredYaw * Settings.Gyroscope.YawSensitivity * accelY * dt
 
-        -- 5. Поворот камеры (Без заваливания горизонта)
+        -- Плавное и точное ориентирование камеры (без заваливания горизонта)
         if math.abs(finalPitch) > 0.0001 or math.abs(finalYaw) > 0.0001 then
             pcall(function()
                 local curCF = Camera.CFrame
@@ -1581,27 +1203,199 @@ local function InitAdvancedGyroscope()
         end
     end)
     SharedState.AddConnection(conn)
-
-    ShowNotification("Гироскоп", "Высокоточный 5-осевой гироскоп успешно активирован!", 4)
+    ConsoleLog("Продвинутый 5-осевой гироскоп успешно запущен.")
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
--- ║                      ЗАПУСК ВСЕХ МОДУЛЕЙ                 ║
+-- ║         КОНФИГУРИРОВАНИЕ ИНТЕРФЕЙСА OBSIDIAN             ║
 -- ╚══════════════════════════════════════════════════════════╝
-ShowNotification("AIO Suite", "Загрузка объединенного пака оптимизаций...", 4)
-task.wait(0.5)
+-- Оптимизация
+OptGroup:AddToggle("FFlagsToggle", {
+    Text = "Умный FFlags Оптимизатор",
+    Default = Settings.Performance.EnableFFlags,
+    Callback = function(v)
+        Settings.Performance.EnableFFlags = v
+        if v then InitFFlags() end
+    end
+})
 
+OptGroup:AddToggle("MapOptimizeToggle", {
+    Text = "Оптимизация карты (SmoothPlastic)",
+    Default = Settings.Performance.OptimizeMap,
+    Callback = function(v)
+        Settings.Performance.OptimizeMap = v
+    end
+})
+
+OptGroup:AddSlider("StretchSlider", {
+    Text = "Растяжение Камеры (Камера-трюк)",
+    Default = Settings.Performance.StretchedResolution,
+    Min = 0.4,
+    Max = 1.0,
+    Rounding = 2,
+    Callback = function(v)
+        Settings.Performance.StretchedResolution = v
+    end
+})
+
+-- Визуальные Элементы
+VisualGroup:AddToggle("GlowESPToggle", {
+    Text = "Smart Glow ESP (Подсветка триггеров)",
+    Default = Settings.SmartGlow.Enabled,
+    Callback = function(v)
+        Settings.SmartGlow.Enabled = v
+    end
+})
+
+VisualGroup:AddToggle("PredictionToggle", {
+    Text = "Предсказание траектории",
+    Default = Settings.Prediction.Enabled,
+    Callback = function(v)
+        Settings.Prediction.Enabled = v
+    end
+})
+
+VisualGroup:AddToggle("JumpCircleToggle", {
+    Text = "Круг максимальной дистанции прыжка",
+    Default = Settings.JumpRadius.Enabled,
+    Callback = function(v)
+        Settings.JumpRadius.Enabled = v
+    end
+})
+
+VisualGroup:AddToggle("ServerGhostToggle", {
+    Text = "Серверный призрак пинга",
+    Default = Settings.ServerGhost.Enabled,
+    Callback = function(v)
+        Settings.ServerGhost.Enabled = v
+    end
+})
+
+-- Комфорт
+ComfortGroup:AddToggle("ZeroCamShakeToggle", {
+    Text = "Zero Cam Shake (Без тряски)",
+    Default = Settings.Comfort.ZeroCamShake,
+    Callback = function(v)
+        Settings.Comfort.ZeroCamShake = v
+    end
+})
+
+ComfortGroup:AddToggle("ShiftLockToggle", {
+    Text = "Кастомный Shoulder ShiftLock",
+    Default = Settings.Comfort.ShiftLock,
+    Callback = function(v)
+        Settings.Comfort.ShiftLock = v
+    end
+})
+
+ComfortGroup:AddDropdown("ShiftLockKeyDropdown", {
+    Values = { "L", "Q", "Z", "LeftControl", "LeftShift" },
+    Default = "L",
+    Text = "Клавиша ShiftLock",
+    Callback = function(v)
+        Settings.Comfort.ShiftLockKey = v
+    end
+})
+
+-- Персонаж и аура
+AvatarGroup:AddToggle("TransparentToggle", {
+    Text = "100% Прозрачный персонаж",
+    Default = Settings.Character.Transparent,
+    Callback = function(v)
+        Settings.Character.Transparent = v
+        local char = player.Character
+        if char then
+            for _, obj in ipairs(char:GetDescendants()) do
+                if obj:IsA("BasePart") or obj:IsA("Decal") then
+                    obj.Transparency = v and 1.0 or 0.0
+                end
+            end
+        end
+    end
+})
+
+AvatarGroup:AddToggle("AuraToggle", {
+    Text = "Светящаяся аура-сфера",
+    Default = Settings.Character.Aura,
+    Callback = function(v)
+        Settings.Character.Aura = v
+    end
+})
+
+-- Настройки гироскопа
+GyroSettingsGroup:AddToggle("GyroToggle", {
+    Text = "Включить Умный Гироскоп",
+    Default = Settings.Gyroscope.Enabled,
+    Callback = function(v)
+        Settings.Gyroscope.Enabled = v
+    end
+})
+
+GyroSettingsGroup:AddSlider("PitchSens", {
+    Text = "Чувствительность по Вертикали (Pitch)",
+    Default = Settings.Gyroscope.PitchSensitivity,
+    Min = 0.1,
+    Max = 3.0,
+    Rounding = 1,
+    Callback = function(v) Settings.Gyroscope.PitchSensitivity = v end
+})
+
+GyroSettingsGroup:AddSlider("YawSens", {
+    Text = "Чувствительность по Горизонтали (Yaw)",
+    Default = Settings.Gyroscope.YawSensitivity,
+    Min = 0.1,
+    Max = 3.0,
+    Rounding = 1,
+    Callback = function(v) Settings.Gyroscope.YawSensitivity = v end
+})
+
+GyroSettingsGroup:AddSlider("DeadzoneSlider", {
+    Text = "Мертвая Зона (Компенсация дрейфа)",
+    Default = Settings.Gyroscope.Deadzone,
+    Min = 0.0,
+    Max = 0.02,
+    Rounding = 4,
+    Callback = function(v) Settings.Gyroscope.Deadzone = v end
+})
+
+-- Информационные параметры гироскопа
+GyroInfoGroup:AddLabel("Статус: Активен")
+GyroInfoGroup:AddLabel("Фильтрация шума: EMA Low-Pass")
+GyroInfoGroup:AddLabel("Ускорение: Динамическое нелинейное")
+
+-- Консоль вывода логов (console.lua)
+local ConsoleBox = ConsoleGroup:AddLabel("ConsoleOutput", {
+    Text = "Ожидание запуска логов...\n",
+    DoesWrap = true,
+})
+getgenv().ObsidianConsoleLabel = ConsoleBox
+
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║                     ЗАПУСК СЮИТЫ                         ║
+-- ╚══════════════════════════════════════════════════════════╝
 InitFFlags()
-InitLightingOptimizer()
-InitOptimizerAndStretch()
-InitZeroCamShake()
-InitShiftLock()
+InitOptimizerAndLighting()
+InitCameraStretch()
+InitCameraComfort()
 InitRaisedCrosshair()
 InitJumpDistanceRadius()
-InitTransparentAuraNoCollision()
+InitAvatarModifications()
 InitPrediction()
 InitSmartGlow()
 InitServerGhost()
 InitAdvancedGyroscope()
 
-ShowNotification("Готово", "Все модули успешно запущены и настроены!", 6)
+-- Настройка менеджеров
+ThemeManager:SetLibrary(Library)
+SaveManager:SetLibrary(Library)
+ThemeManager:SetFolder("MattedMintSuite")
+SaveManager:SetFolder("MattedMintSuite/Configs")
+ThemeManager:ApplyToTab(Tabs.Settings)
+SaveManager:BuildConfigSection(Tabs.Settings)
+
+ConsoleLog("Obsidian Suite успешно запущен и готов к авто-выполнению.")
+Library:Notify({
+    Title = "AIO Suite",
+    Description = "Объединенный пак в мятном стиле успешно загружен!",
+    Time = 6,
+})
