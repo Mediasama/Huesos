@@ -143,20 +143,21 @@ local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
 local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
 local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
 
--- Настройка мятного стиля по умолчанию
-Library.Scheme = {
-    AccentColor = Color3.fromRGB(150, 255, 200), -- Тот самый мягкий мятный цвет
-    AccentColorDark = Color3.fromRGB(100, 200, 150),
-    BackgroundColor = Color3.fromRGB(20, 20, 25),
-    BorderColor = Color3.fromRGB(40, 40, 45),
-    TextColor = Color3.fromRGB(255, 255, 255),
-    SubTextColor = Color3.fromRGB(180, 180, 180),
-}
+-- Настройка темы мятного стиля через ThemeManager по умолчанию (предотвращает баги "got string" при ручной смене Library.Scheme)
+pcall(function()
+    ThemeManager:SetDefaultTheme({
+        AccentColor = Color3.fromRGB(150, 255, 200), -- Мятный Graphite
+        MainColor = Color3.fromRGB(25, 25, 30),
+        BackgroundColor = Color3.fromRGB(20, 20, 25),
+        OutlineColor = Color3.fromRGB(40, 40, 45),
+        FontColor = Color3.fromRGB(255, 255, 255)
+    })
+end)
 
 local Window = Library:CreateWindow({
     Title = "Obsidian Suite | Matted Mint",
     Footer = "Разработано для авто-выполнения | v2.5",
-    Icon = "rbxassetid://95816097006870",
+    Icon = 95816097006870, -- Числовое значение ID предотвращает ошибки Color/string
     NotifySide = "Right",
     ShowCustomCursor = false,
 })
@@ -464,7 +465,7 @@ end
 
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║         2. МОДУЛЬ КАМЕРЫ (SHIFT LOCK, ZERO SHAKE)        ║
--- ╚══════════════════════════════════════════════════════════╗
+-- ╚══════════════════════════════════════════════════════════╝
 local function InitCameraComfort()
     -- Zero Cam Shake
     local connShake = RunService.RenderStepped:Connect(function()
@@ -519,7 +520,7 @@ end
 
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║         3. МОДУЛЬ ПРИЦЕЛА (IMG_0_PK.PNG С FALLBACK)      ║
--- ╚══════════════════════════════════════════════════════════╗
+-- ╚══════════════════════════════════════════════════════════╝
 local function InitRaisedCrosshair()
     if not Settings.Crosshair.Enabled then return end
 
@@ -1227,14 +1228,18 @@ OptGroup:AddToggle("MapOptimizeToggle", {
     end
 })
 
-OptGroup:AddSlider("StretchSlider", {
-    Text = "Растяжение Камеры (Камера-трюк)",
-    Default = Settings.Performance.StretchedResolution,
-    Min = 0.4,
-    Max = 1.0,
-    Rounding = 2,
-    Callback = function(v)
-        Settings.Performance.StretchedResolution = v
+-- Никаких слайдеров! Заменяем Slider на Inputs (Текстовые поля) для мобильного удобства
+OptGroup:AddInput("StretchInput", {
+    Text = "Растяжение Камеры (0.4 - 1.0)",
+    Default = tostring(Settings.Performance.StretchedResolution),
+    Numeric = true,
+    Finished = true,
+    Callback = function(Value)
+        local num = tonumber(Value)
+        if num then
+            Settings.Performance.StretchedResolution = math.clamp(num, 0.4, 1.0)
+            ConsoleLog("Установлено растяжение разрешения: " .. Settings.Performance.StretchedResolution)
+        end
     end
 })
 
@@ -1331,31 +1336,38 @@ GyroSettingsGroup:AddToggle("GyroToggle", {
     end
 })
 
-GyroSettingsGroup:AddSlider("PitchSens", {
-    Text = "Чувствительность по Вертикали (Pitch)",
-    Default = Settings.Gyroscope.PitchSensitivity,
-    Min = 0.1,
-    Max = 3.0,
-    Rounding = 1,
-    Callback = function(v) Settings.Gyroscope.PitchSensitivity = v end
+-- Никаких слайдеров для гироскопа! Заменено на числовые поля (AddInput) для максимального удобства мобильных геймеров
+GyroSettingsGroup:AddInput("PitchSensInput", {
+    Text = "Чувствительность Вертикаль (Pitch)",
+    Default = tostring(Settings.Gyroscope.PitchSensitivity),
+    Numeric = true,
+    Finished = true,
+    Callback = function(v)
+        local num = tonumber(v)
+        if num then Settings.Gyroscope.PitchSensitivity = num end
+    end
 })
 
-GyroSettingsGroup:AddSlider("YawSens", {
-    Text = "Чувствительность по Горизонтали (Yaw)",
-    Default = Settings.Gyroscope.YawSensitivity,
-    Min = 0.1,
-    Max = 3.0,
-    Rounding = 1,
-    Callback = function(v) Settings.Gyroscope.YawSensitivity = v end
+GyroSettingsGroup:AddInput("YawSensInput", {
+    Text = "Чувствительность Горизонталь (Yaw)",
+    Default = tostring(Settings.Gyroscope.YawSensitivity),
+    Numeric = true,
+    Finished = true,
+    Callback = function(v)
+        local num = tonumber(v)
+        if num then Settings.Gyroscope.YawSensitivity = num end
+    end
 })
 
-GyroSettingsGroup:AddSlider("DeadzoneSlider", {
-    Text = "Мертвая Зона (Компенсация дрейфа)",
-    Default = Settings.Gyroscope.Deadzone,
-    Min = 0.0,
-    Max = 0.02,
-    Rounding = 4,
-    Callback = function(v) Settings.Gyroscope.Deadzone = v end
+GyroSettingsGroup:AddInput("DeadzoneInput", {
+    Text = "Мертвая Зона (Дрейф датчиков)",
+    Default = tostring(Settings.Gyroscope.Deadzone),
+    Numeric = true,
+    Finished = true,
+    Callback = function(v)
+        local num = tonumber(v)
+        if num then Settings.Gyroscope.Deadzone = num end
+    end
 })
 
 -- Информационные параметры гироскопа
