@@ -1,0 +1,162 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+camera.CameraType = Enum.CameraType.Scriptable
+
+-- Detect if gyroscope is available
+local useGyro = UserInputService.TouchEnabled and UserInputService.GyroscopeEnabled
+
+-- Gyro settings (only used when gyroscope is available)
+local invertLook = false    -- Most devices need true in landscape
+local invertPitch = false
+local invertYaw = true
+local maxPitch = math.rad(89)
+
+-- Touch settings
+local TOUCH_SENSITIVITY = 0.004  -- Adjust for faster/slower turning (0.003–0.006 recommended)
+local invertTouchPitch = true    -- <<< NEW: Set to true to fix inverted up/down (swipe up = look up, swipe down = look down)
+                                 -- If it still feels wrong after testing, change to false
+
+-- Rotation variables
+local offsetPitch = 0  -- Touch offset when gyro is active
+local offsetYaw = 0
+local currentPitch = 0  -- Direct accumulation when no gyro
+local currentYaw = 0
+
+-- Touch tracking
+local lookActive = false
+local lastLookPosition = nil
+
+-- Character references
+local character
+local humanoid
+local rootPart
+local head
+
+-- First-person body hiding
+local function setupFirstPerson(char)
+    for _, part in pairs(char:GetDescendants()) do
+        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+            part.LocalTransparencyModifier = 1
+        end
+    end
+end
+
+local function onDescendantAdded(desc)
+    if desc:IsA("BasePart") and desc.Name ~= "HumanoidRootPart" then
+        desc.LocalTransparencyModifier = 1
+    end
+end
+
+-- Setup character
+local function setupCharacter(newChar)
+    character = newChar
+    humanoid = newChar:WaitForChild("Humanoid")
+    rootPart = newChar:WaitForChild("HumanoidRootPart")
+    head = newChar:WaitForChild("Head")
+    
+    humanoid.AutoRotate = false
+    
+    setupFirstPerson(newChar)
+    newChar.DescendantAdded:Connect(onDescendantAdded)
+    
+    -- Reset rotation variables
+    offsetPitch = 0
+    offsetYaw = 0
+    
+    if not useGyro then
+        local _, yaw = rootPart.CFrame:ToOrientation()
+        currentYaw = yaw
+        currentPitch = 0
+    end
+end
+
+-- Initial character / respawn
+if player.Character then
+    setupCharacter(player.Character)
+end
+player.CharacterAdded:Connect(setupCharacter)
+
+-- Touch controls (active in both modes)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.UserInputType == Enum.UserInputType.Touch then
+        local viewportSize = camera.ViewportSize
+        if input.Position.X > viewportSize.X / 2 then  -- Right half = look controls
+            lookActive = true
+            lastLookPosition = input.Position
+        end
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.UserInputType == Enum.UserInputType.Touch and lookActive and lastLookPosition then
+        local delta = input.Position - lastLookPosition
+        
+        local deltaYaw = -delta.X * TOUCH_SENSITIVITY    -- Swipe right → turn right (horizontal feels natural)
+        local deltaPitch = (invertTouchPitch and -delta.Y or delta.Y) * TOUCH_SENSITIVITY  -- Vertical: with invertTouchPitch = true → swipe up = look up
+        
+        if useGyro then
+            -- Add to offset (adjusts the "center" of gyro aiming)
+            offsetYaw += deltaYaw
+            offsetPitch += deltaPitch
+        else
+            -- Direct relative turning (fallback when no gyro)
+            currentYaw += deltaYaw
+            currentPitch += deltaPitch
+        end
+        
+        lastLookPosition = input.Position
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.UserInputType == Enum.UserInputType.Touch then
+        lookActive = false
+        lastLookPosition = nil
+    end
+end)
+
+-- Main update
+RunService.RenderStepped:Connect(function()
+    if not (head and rootPart) then return end
+    
+    local camPos = head.Position
+    local finalPitch, finalYaw
+    
+    if useGyro then
+        local _, deviceCF = UserInputService:GetDeviceRotation()
+        if not deviceCF then return end
+        
+        local rawLook = invertLook and -deviceCF.LookVector or deviceCF.LookVector
+        
+        local horizLook = Vector3.new(rawLook.X, 0, rawLook.Z)
+        local horizMag = horizLook.Magnitude
+        if horizMag < 0.01 then horizMag = 0.01 end
+        
+        local basePitch = math.atan2(rawLook.Y, horizMag)
+        if invertPitch then basePitch = -basePitch end
+        
+        local baseYaw = math.atan2(rawLook.X, rawLook.Z)
+        if invertYaw then baseYaw = -baseYaw end
+        
+        finalPitch = basePitch + offsetPitch
+        finalYaw = baseYaw + offsetYaw
+    else
+        finalPitch = currentPitch
+        finalYaw = currentYaw
+    end
+    
+    -- Clamp pitch in both modes
+    finalPitch = math.clamp(finalPitch, -maxPitch, maxPitch)
+    
+    local camCF = CFrame.fromOrientation(finalPitch, finalYaw, 0)
+    
+    camera.CFrame = CFrame.new(camPos) * camCF
+    rootPart.CFrame = CFrame.new(rootPart.Position) * CFrame.Angles(0, finalYaw, 0)
+end)
