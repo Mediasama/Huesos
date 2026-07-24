@@ -27,6 +27,11 @@ local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
 
+-- Вспомогательная функция lerp2 (объявлена в самом верху для безопасного вызова во всех модулях)
+local function lerp2(a, b, t)
+    return a + (b - a) * t
+end
+
 -- Динамическое получение текущей камеры (на случай смены/спавна)
 local Camera = workspace.CurrentCamera or workspace:FindFirstChildOfClass("Camera")
 
@@ -84,6 +89,8 @@ function SharedState.Cleanup()
     end
     -- Сброс коллизии камеры к стандартному поведению Zoom
     pcall(function() player.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Zoom end)
+    -- Возвращаем тип камеры к Custom при очистке
+    pcall(function() if Camera then Camera.CameraType = Enum.CameraType.Custom end end)
     -- Отключаем гироскопический рендер
     pcall(function() RunService:UnbindFromRenderStep("AIO_GyroCamera") end)
 
@@ -116,6 +123,9 @@ end
 -- Динамическое отслеживание смены Camera
 local camConnection = workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
     Camera = workspace.CurrentCamera or workspace:FindFirstChildOfClass("Camera")
+    if Settings and Settings.Gyroscope and Settings.Gyroscope.Enabled and Camera then
+        pcall(function() Camera.CameraType = Enum.CameraType.Scriptable end)
+    end
 end)
 SharedState.AddConnection(camConnection)
 
@@ -240,6 +250,15 @@ local Settings = {
     },
     ServerGhost = {
         Enabled = true,
+    },
+    TargetEsp = {
+        Enabled = true,
+        Range = 100,
+        SmoothFade = 10,
+        SmoothScale = 8,
+        RotAngle = 40,
+        RotSpeed = 2,
+        VerticalOffset = 1.2,
     },
     Gyroscope = {
         Enabled = true,
@@ -665,6 +684,8 @@ local function InitAvatarModifications()
 
         local function MakeTransparent(obj)
             pcall(function()
+                -- Smart Glow ESP не должен подсвечивать наш светящийся шар ауры
+                if obj.Name == "AuraSphere_Client" or obj.Name:find("ghost") then return end
                 if obj:IsA("BasePart") or obj:IsA("Decal") then
                     obj.Transparency = Settings.Character.Transparent and 1.0 or 0.0
                 end
@@ -699,14 +720,18 @@ local function InitAvatarModifications()
             weld.Part1 = aura
             weld.Parent = aura
 
-            -- Тонкая обводка, видимая через стены
-            local sBox = Instance.new("SelectionBox")
-            sBox.Name = "AuraGlowBox"
-            sBox.Adornee = aura
-            sBox.Color3 = Settings.Character.AuraColor
-            sBox.LineThickness = 0.05
-            sBox.Parent = aura
-            SharedState.AddInstance(sBox)
+            -- При сильном приближении и от первого лица скрываем шар ауры
+            local camCheck = RunService.RenderStepped:Connect(function()
+                if Camera and aura and aura.Parent then
+                    local dist = (Camera.CFrame.Position - aura.Position).Magnitude
+                    if dist < 2.5 then
+                        aura.Transparency = 1.0
+                    else
+                        aura.Transparency = 0.5
+                    end
+                end
+            end)
+            SharedState.AddConnection(camCheck)
         end
     end
 
@@ -965,7 +990,7 @@ end
 
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║         7. МОДУЛЬ ПОДСВЕТКИ SMART GLOW (ESP)             ║
--- ╚══════════════════════════════════════════════════════════╝
+-- ╚══════════════════════════════════════════════════════════╗
 local function InitSmartGlow()
     if not Settings.SmartGlow.Enabled then return end
     local processed = {}
@@ -991,6 +1016,9 @@ local function InitSmartGlow()
 
     local function Analyze(obj)
         if not obj then return end
+        -- Исключаем наш светящийся шар ауры и серверных призраков, чтобы они не выделялись боксами
+        if obj.Name == "AuraSphere_Client" or obj.Name:find("ghost") then return end
+
         local name = obj.Name:lower()
         local isSuspicious = false
         local keywords = {"prompt", "proximity", "touch", "interact", "trigger"}
@@ -1031,7 +1059,7 @@ local function InitSmartGlow()
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
--- ║         8. МОДУЛЬ СЕРВЕРНОГО ПРИЗРАКА ПИНГА (GHOST)      ║
+-- ║      8. МОДУЛЬ СЕРВЕРНОГО ПРИЗРАКА ПИНГА С TRAIL (GHOST) ║
 -- ╚══════════════════════════════════════════════════════════╝
 local function InitServerGhost()
     if not Settings.ServerGhost.Enabled then return end
@@ -1043,27 +1071,6 @@ local function InitServerGhost()
         "LeftLowerLeg","RightLowerLeg","LeftFoot","RightFoot"
     }
 
-    local function make_ghost(real)
-        local g = Instance.new("Part")
-        g.Name = real.Name .. "_ghost"
-        g.Size = real.Size
-        g.Anchored = true
-        g.CanCollide = false
-        g.Transparency = 1
-        g.CFrame = real.CFrame
-        g.Parent = workspace
-        SharedState.AddInstance(g)
-
-        local b = Instance.new("SelectionBox")
-        b.Adornee = g
-        b.LineThickness = 0.02
-        b.Color3 = Color3.fromRGB(0, 255, 200)
-        b.Parent = g
-        SharedState.AddInstance(b)
-
-        return {real = real, ghost = g, box = b}
-    end
-
     local function setup()
         local char = player.Character
         if not char then return end
@@ -1072,11 +1079,31 @@ local function InitServerGhost()
         local hrp = char:FindFirstChild("HumanoidRootPart")
         if not hum or not hrp then return end
 
-        local ghosts = {}
+        -- ЕДИНЫЙ БОКС НА ВСЁ ТЕЛО (Один общий SelectionBox вместо кучи раздельных на каждую руку/ногу)
+        local ghostModel = Instance.new("Model")
+        ghostModel.Name = "ServerGhostModel_Client"
+        ghostModel.Parent = workspace
+        SharedState.AddInstance(ghostModel)
+
+        local mainBox = Instance.new("SelectionBox")
+        mainBox.Adornee = ghostModel
+        mainBox.LineThickness = 0.02
+        mainBox.Color3 = Color3.fromRGB(0, 255, 200) -- Единый мятный неоновый бокс
+        mainBox.Parent = ghostModel
+        SharedState.AddInstance(mainBox)
+
+        local parts = {}
         for _, n in ipairs(part_names) do
             local p = char:FindFirstChild(n)
             if p and p:IsA("BasePart") then
-                ghosts[n] = make_ghost(p)
+                local g = Instance.new("Part")
+                g.Name = p.Name .. "_ghost"
+                g.Size = p.Size
+                g.Anchored = true
+                g.CanCollide = false
+                g.Transparency = 1.0 -- Скрываем сами меши, виден только единый SelectionBox модели!
+                g.Parent = ghostModel
+                parts[n] = {real = p, ghost = g}
             end
         end
 
@@ -1085,10 +1112,11 @@ local function InitServerGhost()
         local last = os.clock()
         local acc = 0
         local frames = {}
+        local trailTimer = 0
 
         local hb = RunService.Heartbeat:Connect(function(dt)
             if not hrp or not hrp.Parent then
-                for _, g in pairs(ghosts) do if g.ghost then g.ghost:Destroy() end end
+                pcall(function() ghostModel:Destroy() end)
                 return
             end
 
@@ -1111,9 +1139,9 @@ local function InitServerGhost()
             local hrp_cf = server_cf
             local hrp_pos = hrp_cf.Position
             local rel = {}
-            for n, g in pairs(ghosts) do
-                if g.real and g.real.Parent then
-                    rel[n] = hrp_cf:ToObjectSpace(g.real.CFrame)
+            for n, data in pairs(parts) do
+                if data.real and data.real.Parent then
+                    rel[n] = hrp_cf:ToObjectSpace(data.real.CFrame)
                 end
             end
 
@@ -1130,12 +1158,53 @@ local function InitServerGhost()
             local pred_pos = f.pos + f.vel * td
             local pred_cf = CFrame.new(pred_pos) * (f.cf - f.cf.Position)
 
-            for n, g in pairs(ghosts) do
-                local ghost = g.ghost
-                local box = g.box
+            -- Позиционируем призрачные части тела
+            for n, data in pairs(parts) do
+                local ghost = data.ghost
                 local r = f.rel[n]
-                local tgt = r and pred_cf * r or (g.real and g.real.CFrame or ghost.CFrame)
+                local tgt = r and pred_cf * r or (data.real and data.real.CFrame or ghost.CFrame)
                 ghost.CFrame = ghost.CFrame:Lerp(tgt, math.min(delta * 18, 1))
+            end
+
+            -- Автоматическое скрытие призрака (100% прозрачность) при сильном приближении/от первого лица
+            if Camera then
+                local distToGhost = (Camera.CFrame.Position - pred_pos).Magnitude
+                if distToGhost < 2.5 then
+                    mainBox.Transparency = 1.0
+                else
+                    mainBox.Transparency = 0.0
+                end
+            end
+
+            -- СОЗДАНИЕ MOTION TRAIL ДЛЯ СИЛУЭТА СЕРВЕРА (Мягкие затухающие неоновые следы)
+            trailTimer = trailTimer + dt
+            if trailTimer >= 0.05 then
+                trailTimer = 0
+                if mainBox.Transparency < 0.99 then
+                    task.spawn(function()
+                        -- Создаем затухающий бокс в текущем положении призрачной модели
+                        local trailPart = Instance.new("Part")
+                        trailPart.Size = ghostModel:GetExtentsSize()
+                        trailPart.CFrame = pred_cf
+                        trailPart.Anchored = true
+                        trailPart.CanCollide = false
+                        trailPart.Transparency = 1
+                        trailPart.Parent = workspace
+
+                        local trailBox = Instance.new("SelectionBox")
+                        trailBox.Adornee = trailPart
+                        trailBox.LineThickness = 0.01
+                        trailBox.Color3 = Color3.fromRGB(0, 255, 200)
+                        trailBox.Parent = trailPart
+
+                        -- Плавное увядание следа (Fade out)
+                        for alpha = 0.8, 1.0, 0.05 do
+                            trailBox.Transparency = alpha
+                            task.wait(0.04)
+                        end
+                        trailPart:Destroy()
+                    end)
+                end
             end
         end)
         SharedState.AddConnection(hb)
@@ -1144,99 +1213,237 @@ local function InitServerGhost()
     if player.Character then setup() end
     local conn = player.CharacterAdded:Connect(setup)
     SharedState.AddConnection(conn)
-    ConsoleLog("Серверный призрак пинга инициализирован.")
+    ConsoleLog("Серверный призрак пинга инициализирован с единым боксом и Motion Trail.")
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
--- ║  9. ПРЕМИАЛЬНЫЙ 1-ST/3-RD PERSON ГИРОСКОП (НЕ КОНФЛИКТУЕТ)║
+-- ║         9. МОДУЛЬ ТАРГЕТ СПРАЙТА (TARGET ESP)            ║
+-- ╚══════════════════════════════════════════════════════════╝
+local function InitTargetESP()
+    if not Settings.TargetEsp.Enabled then return end
+
+    local guiParent = player:FindFirstChild("PlayerGui") or CoreGui
+
+    -- Создаем красивый ImageLabel для вращающегося таргета
+    local targetGui = Instance.new("ScreenGui")
+    targetGui.Name = "MiteTarget_Gui"
+    targetGui.ResetOnSpawn = false
+    targetGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    pcall(function() targetGui.Parent = guiParent end)
+    SharedState.AddInstance(targetGui)
+
+    local targetImg = Instance.new("ImageLabel")
+    targetImg.Size = UDim2.new(0, Settings.TargetEsp.Range, 0, Settings.TargetEsp.Range)
+    targetImg.AnchorPoint = Vector2.new(0.5, 0.5)
+    targetImg.BackgroundTransparency = 1
+    targetImg.Image = "rbxassetid://133065276440430" -- Идеальная крутящаяся текстура круга таргета!
+    targetImg.ImageColor3 = Color3.fromRGB(0, 255, 200) -- Наш неоновый мятный цвет!
+    targetImg.ImageTransparency = 1.0
+    targetImg.Visible = false
+    targetImg.Parent = targetGui
+    SharedState.AddInstance(targetImg)
+
+    local currentTransparency = 1.0
+    local currentScale = 1.0
+    local tclock = 0.0
+
+    local function GetTarget()
+        local vpSize = Camera.ViewportSize
+        local center = Vector2.new(vpSize.X / 2, vpSize.Y / 2)
+        local ray = Camera:ViewportPointToRay(center.X, center.Y)
+
+        local raycastParams = RaycastParams.new()
+        raycastParams.FilterDescendantsInstances = {player.Character}
+        raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+
+        local result = workspace:Raycast(ray.Origin, ray.Direction * Settings.TargetEsp.Range, raycastParams)
+        if result and result.Instance then
+            local model = result.Instance:FindFirstAncestorOfClass("Model")
+            local hum = model and model:FindFirstChildOfClass("Humanoid")
+            local root = model and model:FindFirstChild("HumanoidRootPart")
+            if hum and root and hum.Health > 0 then
+                return root
+            end
+        end
+        return nil
+    end
+
+    local conn = RunService.RenderStepped:Connect(function(dt)
+        tclock = tclock + dt * Settings.TargetEsp.RotSpeed
+
+        local activeTarget = GetTarget()
+        local shouldBeVisible = activeTarget ~= nil
+        local targetTransparencyVal = shouldBeVisible and 0.0 or 1.0
+
+        currentTransparency = lerp2(currentTransparency, targetTransparencyVal, dt * Settings.TargetEsp.SmoothFade)
+        targetImg.ImageTransparency = currentTransparency
+
+        if shouldBeVisible and targetImg.ImageTransparency < 0.99 then
+            local targetPos = activeTarget.Position + Vector3.new(0, Settings.TargetEsp.VerticalOffset, 0)
+            local screenPos, onScreen = Camera:WorldToViewportPoint(targetPos)
+
+            if onScreen then
+                targetImg.Visible = true
+                targetImg.Position = UDim2.new(0, screenPos.X, 0, screenPos.Y)
+
+                local dist = (activeTarget.Position - Camera.CFrame.Position).Magnitude
+                local alpha = math.clamp(dist / Settings.TargetEsp.Range, 0, 1)
+                local targetScale = 3.6 * (1 - alpha) + 2.6 * alpha
+
+                currentScale = lerp2(currentScale, targetScale, dt * Settings.TargetEsp.SmoothScale)
+
+                targetImg.Size = UDim2.new(0, 70 * currentScale, 0, 70 * currentScale)
+                targetImg.Rotation = math.sin(tclock) * Settings.TargetEsp.RotAngle
+            else
+                targetImg.Visible = false
+            end
+        else
+            targetImg.Visible = false
+        end
+    end)
+    SharedState.AddConnection(conn)
+    ConsoleLog("Таргет ESP модуль (наведение взглядом) успешно запущен.")
+end
+
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  10. ПРЕМИАЛЬНЫЙ 1-ST/3-RD PERSON ГИРОСКОП (НЕ КОНФЛИКТУЕТ)║
 -- ╚══════════════════════════════════════════════════════════╝
 local function InitAdvancedGyroscope()
     if not Settings.Gyroscope.Enabled then return end
 
     pcall(function() UserInputService.GyroscopeEnabled = true end)
 
-    local sPrevPitch = 0
-    local sPrevYaw = 0
+    -- Переключаем камеру в Scriptable режим, чтобы получить ПОЛНЫЙ контроль над CFrame (не конфликтует с Roblox-логикой!)
+    if Camera then
+        pcall(function() Camera.CameraType = Enum.CameraType.Scriptable end)
+    end
+
+    local currentZoom = 12
+    local offsetPitch = 0  -- Touch offsets
+    local offsetYaw = 0
+    local currentPitch = 0 -- Fallback накопление
+    local currentYaw = 0
+
+    local lookActive = false
+    local lastLookPosition = nil
     local prevDevRot = nil
+
+    -- Отслеживание Touch (тачпад поворота на правой половине экрана)
+    local touchBegan = UserInputService.InputBegan:Connect(function(input, processed)
+        if processed then return end
+        if input.UserInputType == Enum.UserInputType.Touch then
+            local vpSize = Camera.ViewportSize
+            if input.Position.X > vpSize.X / 2 then
+                lookActive = true
+                lastLookPosition = input.Position
+            end
+        end
+    end)
+    SharedState.AddConnection(touchBegan)
+
+    local touchChanged = UserInputService.InputChanged:Connect(function(input, processed)
+        if processed then return end
+        if input.UserInputType == Enum.UserInputType.Touch and lookActive and lastLookPosition then
+            local delta = input.Position - lastLookPosition
+            local sensitivity = 0.004 -- Идеальный сенсор под пальцы
+
+            local deltaYaw = -delta.X * sensitivity
+            local deltaPitch = -delta.Y * sensitivity -- Свайп вверх = смотрим вверх (интуитивно!)
+
+            if UserInputService.GyroscopeEnabled then
+                offsetYaw = offsetYaw + deltaYaw
+                offsetPitch = offsetPitch + deltaPitch
+            else
+                currentYaw = currentYaw + deltaYaw
+                currentPitch = currentPitch + deltaPitch
+            end
+            lastLookPosition = input.Position
+        end
+    end)
+    SharedState.AddConnection(touchChanged)
+
+    local touchEnded = UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch then
+            lookActive = false
+            lastLookPosition = nil
+        end
+    end)
+    SharedState.AddConnection(touchEnded)
+
+    -- Поддержка изменения Zoom мыши
+    local wheelConn = UserInputService.InputChanged:Connect(function(input, processed)
+        if input.UserInputType == Enum.UserInputType.MouseWheel then
+            currentZoom = math.clamp(currentZoom - input.Position.Z * 2.0, 0.5, 40)
+        end
+    end)
+    SharedState.AddConnection(wheelConn)
+
+    -- Поддержка изменения Zoom тач-пинчем
+    local pinchConn = UserInputService.TouchPinch:Connect(function(touchPositions, scale, velocity, state, processed)
+        if not processed then
+            currentZoom = math.clamp(currentZoom / scale, 0.5, 40)
+        end
+    end)
+    SharedState.AddConnection(pinchConn)
 
     pcall(function() RunService:UnbindFromRenderStep("AIO_GyroCamera") end)
 
-    -- Повышаем приоритет рендеринга выше Camera (Camera.Value + 10), чтобы работать поверх дефолтных свайпов!
     RunService:BindToRenderStep("AIO_GyroCamera", Enum.RenderPriority.Camera.Value + 10, function(dt)
-        if not Settings.Gyroscope.Enabled then return end
+        local char = player.Character
+        local head = char and char:FindFirstChild("Head")
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if not char or not head or not hrp then return end
 
-        local rawPitch, rawYaw = 0, 0
-        local successRot, rotRate = pcall(function() return UserInputService:GetDeviceRotationRate() end)
-
-        -- Считываем дельты Pitch и Yaw
-        if successRot and rotRate and (math.abs(rotRate.X) > 0.01 or math.abs(rotRate.Y) > 0.01) then
-            rawPitch = rotRate.X
-            rawYaw = rotRate.Y
-        else
-            -- Резервный расчет по Delta поворота DeviceRotation (устраняет бесконечное заваливание / joystick-спин)
-            local successCFrame, devRot = pcall(function() return UserInputService.DeviceRotation end)
-            if successCFrame and devRot then
-                if prevDevRot then
-                    local deltaRot = prevDevRot:Inverse() * devRot
-                    local dx, dy, dz = deltaRot:ToEulerAnglesXYZ()
-                    rawPitch = dx
-                    rawYaw = dy
+        -- Всегда принудительно скрываем меши от первого лица
+        if currentZoom < 2.5 then
+            for _, p in pairs(char:GetDescendants()) do
+                if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" and p.Name ~= "AuraSphere_Client" then
+                    p.LocalTransparencyModifier = 1.0
                 end
-                prevDevRot = devRot
             end
         end
 
-        -- 1. Подавление микротремора (EMA Low-Pass) + Deadzone
-        if math.abs(rawPitch) < Settings.Gyroscope.Deadzone then rawPitch = 0 end
-        if math.abs(rawYaw) < Settings.Gyroscope.Deadzone then rawYaw = 0 end
+        local finalPitch, finalYaw
+        local successCFrame, devRot, sensorType = pcall(function() return UserInputService:GetDeviceRotation() end)
 
-        -- 2. Адаптивное сглаживание (Dynamic Alpha)
-        local magP = math.abs(rawPitch)
-        local alphaP = Settings.Gyroscope.AlphaMin + (Settings.Gyroscope.AlphaMax - Settings.Gyroscope.AlphaMin) * (1 - math.exp(-Settings.Gyroscope.AlphaSpeedCoeff * magP * magP))
-        local sFilteredPitch = alphaP * rawPitch + (1 - alphaP) * sPrevPitch
-        sPrevPitch = sFilteredPitch
+        if successCFrame and devRot then
+            if prevDevRot then
+                local deltaRot = prevDevRot:Inverse() * devRot
+                local dx, dy, dz = deltaRot:ToEulerAnglesXYZ()
 
-        local magY = math.abs(rawYaw)
-        local alphaY = Settings.Gyroscope.AlphaMin + (Settings.Gyroscope.AlphaMax - Settings.Gyroscope.AlphaMin) * (1 - math.exp(-Settings.Gyroscope.AlphaSpeedCoeff * magY * magY))
-        local sFilteredYaw = alphaY * rawYaw + (1 - alphaY) * sPrevYaw
-        sPrevYaw = sFilteredYaw
-
-        -- 3. Нелинейное прогрессивное ускорение вращения (AAA Curve)
-        local speedP = math.abs(sFilteredPitch)
-        local accelP = 1 + (Settings.Gyroscope.AccelFactor * speedP * speedP) / (1 + (speedP / Settings.Gyroscope.AccelLimit) * (speedP / Settings.Gyroscope.AccelLimit))
-
-        local speedY = math.abs(sFilteredYaw)
-        local accelY = 1 + (Settings.Gyroscope.AccelFactor * speedY * speedY) / (1 + (speedY / Settings.Gyroscope.AccelLimit) * (speedY / Settings.Gyroscope.AccelLimit))
-
-        -- Финальные угловые дельты поворота
-        local finalPitch = sFilteredPitch * Settings.Gyroscope.PitchSensitivity * accelP * dt
-        local finalYaw = sFilteredYaw * Settings.Gyroscope.YawSensitivity * accelY * dt
-
-        -- 4. Вращение камеры (работает поверх пользовательских свайпов, без заваливания горизонта, поддерживает 1st/3rd person)
-        if math.abs(finalPitch) > 0.0001 or math.abs(finalYaw) > 0.0001 then
-            pcall(function()
-                local currentCF = Camera.CFrame
-                local focusPos = Camera.Focus.Position
-                local distance = (currentCF.Position - focusPos).Magnitude
-
-                -- Считываем дельты с ToOrientation() для 100% математической корректности осей
-                local rx, ry, rz = currentCF:ToOrientation() -- rx = pitch, ry = yaw, rz = roll
-
-                -- Корректируем Pitch (X) и Yaw (Y)
-                rx = math.clamp(rx - finalPitch, -math.rad(80), math.rad(80))
-                ry = ry - finalYaw
-
-                local targetRotation = CFrame.fromOrientation(rx, ry, 0)
-
-                if distance < 1 then
-                    -- 1st Person
-                    Camera.CFrame = CFrame.new(currentCF.Position) * targetRotation
-                else
-                    -- 3rd Person (орбитальное вращение вокруг персонажа)
-                    Camera.CFrame = CFrame.new(focusPos) * targetRotation * CFrame.new(0, 0, distance)
+                if math.abs(dx) > Settings.Gyroscope.Deadzone then
+                    offsetPitch = offsetPitch - dx * Settings.Gyroscope.PitchSensitivity
                 end
-            end)
+                if math.abs(dy) > Settings.Gyroscope.Deadzone then
+                    offsetYaw = offsetYaw - dy * Settings.Gyroscope.YawSensitivity
+                end
+            end
+            prevDevRot = devRot
+            finalPitch = offsetPitch
+            finalYaw = offsetYaw
+        else
+            -- Fallback без гироскопа (чистый палец)
+            finalPitch = currentPitch
+            finalYaw = currentYaw
         end
+
+        -- Clamping pitch (X axis) to prevent flipping upside down
+        finalPitch = math.clamp(finalPitch, -math.rad(80), math.rad(80))
+
+        -- Позиционирование камеры (поддерживает 1st/3rd Person орбиту)
+        local camPos = head.Position
+        local targetRotation = CFrame.fromOrientation(finalPitch, finalYaw, 0)
+
+        if currentZoom < 2.5 then
+            -- 1st Person
+            Camera.CFrame = CFrame.new(camPos) * targetRotation
+        else
+            -- 3rd Person орбита вокруг персонажа
+            Camera.CFrame = CFrame.new(camPos) * targetRotation * CFrame.new(0, 0, currentZoom)
+        end
+
+        -- Автоматический поворот персонажа за направлением взгляда
+        hrp.CFrame = CFrame.new(hrp.Position) * CFrame.Angles(0, finalYaw, 0)
     end)
 end
 
@@ -1306,6 +1513,14 @@ VisualGroup:AddToggle("ServerGhostToggle", {
     Default = Settings.ServerGhost.Enabled,
     Callback = function(v)
         Settings.ServerGhost.Enabled = v
+    end
+})
+
+VisualGroup:AddToggle("TargetEspToggle", {
+    Text = "Включить Target ESP (Авто-прицеливание)",
+    Default = Settings.TargetEsp.Enabled,
+    Callback = function(v)
+        Settings.TargetEsp.Enabled = v
     end
 })
 
@@ -1428,6 +1643,7 @@ InitAvatarModifications()
 InitPrediction()
 InitSmartGlow()
 InitServerGhost()
+InitTargetESP()
 InitAdvancedGyroscope()
 
 -- Настройка менеджеров
