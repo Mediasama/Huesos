@@ -70,7 +70,7 @@ function SharedState.Cleanup()
     end
     -- Принудительно очищаем оставшиеся призраки в workspace
     for _, obj in ipairs(workspace:GetChildren()) do
-        if obj.Name == "ServerGhostModel_Client" or obj.Name:find("_ghost") then
+        if obj.Name == "ServerGhostModel_Client" or obj.Name:find("_ghost") or obj.Name == "SkyDome_Client" then
             pcall(function() obj:Destroy() end)
         end
     end
@@ -86,19 +86,6 @@ function SharedState.Cleanup()
     pcall(function() if Camera then Camera.CameraType = Enum.CameraType.Custom end end)
     -- Отключаем гироскопический рендер
     pcall(function() RunService:UnbindFromRenderStep("AIO_GyroCamera") end)
-    -- Восстанавливаем оригинальный скайбокс
-    pcall(function()
-        local Lighting = game:GetService("Lighting")
-        local origSky = Lighting:FindFirstChild("OriginalSkyboxBackup")
-        if origSky then
-            for _, child in ipairs(Lighting:GetChildren()) do
-                if child:IsA("Sky") and child.Name ~= "OriginalSkyboxBackup" then
-                    child:Destroy()
-                end
-            end
-            origSky.Name = "Sky"
-        end
-    end)
 
     SharedState.Connections = {}
     SharedState.Drawings = {}
@@ -184,7 +171,7 @@ end)
 
 local Window = Library:CreateWindow({
     Title = "Obsidian Suite | Matted Mint",
-    Footer = "Разработано для авто-выполнения | v2.6",
+    Footer = "Разработано для авто-выполнения | v2.7",
     Icon = 95816097006870,
     NotifySide = "Right",
     ShowCustomCursor = false,
@@ -225,7 +212,9 @@ local Settings = {
         Fullbright = true,
         RemoveAtmosphere = true,
         ContrastPreserve = true,
-        SpaceSkybox = true,
+        SpaceSkybox = false,
+        SkyDome = true, -- Инвертированный купол по умолчанию!
+        SkyDomeColor = Color3.fromRGB(10, 35, 28), -- Темно-мятный цвет
     },
     Comfort = {
         ZeroCamShake = true,
@@ -235,8 +224,8 @@ local Settings = {
     Crosshair = {
         Enabled = true,
         Size = 32,
-        Width = 32,
-        Height = 32,
+        Width = 80, -- Настраиваемая ширина по умолчанию
+        Height = 40, -- Настраиваемая высота по умолчанию
         XOffset = 0,
         YOffset = -20,
     },
@@ -265,16 +254,16 @@ local Settings = {
         SmoothFade = 12,
         SmoothScale = 10,
         RotAngle = 360,
-        RotSpeed = 1,
+        RotSpeed = 0.15, -- Существенно снизили скорость вращения
         VerticalOffset = 0,
-        FovRadius = 80, -- Радиус зоны захвата вокруг прицела на экране (FOV lock)
+        FovRadius = 80,
+        TextureChoice = "mitetarget.svg", -- Предустановленный выбор ("mitetarget.svg" или "1784850230697.png")
     },
     Gyroscope = {
-        Enabled = true,
+        Enabled = false, -- ОТКЛЮЧЕНО ПО УМОЛЧАНИЮ
         PitchSensitivity = 1.5,
         YawSensitivity = 1.8,
         Deadzone = 0.001,
-        AlphaMin = 0.1,
     }
 }
 
@@ -309,7 +298,8 @@ end
 
 -- Кэшируем кастомные текстуры
 local crosshairAsset = GetCustomTexture("img_0_pk.png", "https://raw.githubusercontent.com/Mediasama/Huesos/main/img_0_pk.png")
-local targetAsset = GetCustomTexture("mitetarget.svg", "https://raw.githubusercontent.com/Mediasama/Huesos/main/img_0_pk.png") -- На случай отсутствия SVG, используем img_0_pk как красивый вращающийся спрайт
+local targetAssetSvg = GetCustomTexture("mitetarget.svg", "https://raw.githubusercontent.com/Mediasama/Huesos/main/mitetarget.svg")
+local targetAssetPng = GetCustomTexture("1784850230697.png", "https://raw.githubusercontent.com/Mediasama/Huesos/main/1784850230697.png")
 
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║         1. МОДУЛЬ FFLAGS И ОПТИМИЗАЦИИ (PERFORMANCE)     ║
@@ -486,7 +476,7 @@ local function InitOptimizerAndLighting()
         SharedState.AddConnection(conn)
     end
 
-    -- Настройки света (Fullbright + Сохранение Контраста + Скайбокс)
+    -- Настройки света (Fullbright + Сохранение Контраста)
     local function ApplyLighting()
         pcall(function()
             local Lighting = game:GetService("Lighting")
@@ -512,44 +502,37 @@ local function InitOptimizerAndLighting()
                 Lighting.FogEnd = 999999
             end
 
-            -- Космический скайбокс
-            if Settings.Lighting.SpaceSkybox then
-                -- Резервное сохранение дефолтного
-                local existingSky = Lighting:FindFirstChildOfClass("Sky")
-                if existingSky and existingSky.Name ~= "SpaceSky" and not Lighting:FindFirstChild("OriginalSkyboxBackup") then
-                    existingSky.Name = "OriginalSkyboxBackup"
+            -- СОЗДАНИЕ КУПОЛА (Sky Dome / Inverted Mesh)
+            if Settings.Lighting.SkyDome then
+                local dome = workspace:FindFirstChild("SkyDome_Client")
+                if not dome then
+                    dome = Instance.new("Part")
+                    dome.Name = "SkyDome_Client"
+                    dome.Size = Vector3.new(2000, 2000, 2000)
+                    dome.Anchored = true
+                    dome.CanCollide = false
+                    dome.CastShadow = false
+                    dome.Color = Settings.Lighting.SkyDomeColor
+                    dome.Material = Enum.Material.SmoothPlastic
+                    dome.Parent = workspace
+                    SharedState.AddInstance(dome)
+
+                    local mesh = Instance.new("SpecialMesh")
+                    mesh.MeshType = Enum.MeshType.FileMesh
+                    -- Инвертированная сфера с вывернутыми внутрь полигонами, которая закрывает весь игровой мир!
+                    mesh.MeshId = "rbxassetid://4057161667"
+                    mesh.Scale = Vector3.new(2000, 2000, 2000)
+                    mesh.Parent = dome
                 end
 
-                local spaceSky = Lighting:FindFirstChild("SpaceSky")
-                if not spaceSky then
-                    spaceSky = Instance.new("Sky")
-                    spaceSky.Name = "SpaceSky"
-                    spaceSky.SkyboxBk = "rbxassetid://120612190"
-                    spaceSky.SkyboxDn = "rbxassetid://120612133"
-                    spaceSky.SkyboxFt = "rbxassetid://120612217"
-                    spaceSky.SkyboxLf = "rbxassetid://120612260"
-                    spaceSky.SkyboxRt = "rbxassetid://120612297"
-                    spaceSky.SkyboxUp = "rbxassetid://120612330"
-                    spaceSky.StarCount = 3000
-                    spaceSky.Parent = Lighting
+                -- Позиционируем купол строго на камеру
+                if Camera then
+                    dome.CFrame = CFrame.new(Camera.CFrame.Position)
+                    dome.Color = Settings.Lighting.SkyDomeColor
                 end
-
-                -- Деактивируем другие
-                for _, child in ipairs(Lighting:GetChildren()) do
-                    if child:IsA("Sky") and child.Name ~= "SpaceSky" then
-                        child.Parent = nil
-                    end
-                end
-                spaceSky.Parent = Lighting
             else
-                local spaceSky = Lighting:FindFirstChild("SpaceSky")
-                if spaceSky then spaceSky.Parent = nil end
-
-                local origSky = Lighting:FindFirstChild("OriginalSkyboxBackup")
-                if origSky then
-                    origSky.Name = "Sky"
-                    origSky.Parent = Lighting
-                end
+                local dome = workspace:FindFirstChild("SkyDome_Client")
+                if dome then dome:Destroy() end
             end
         end)
     end
@@ -561,13 +544,13 @@ local function InitOptimizerAndLighting()
     end)
     SharedState.AddConnection(connL)
 
-    -- Постоянный апдейт состояния света из настроек
+    -- Постоянный апдейт состояния света и позиционирования купола из настроек
     task.spawn(function()
-        while task.wait(0.5) do
+        while task.wait(0.1) do
             ApplyLighting()
         end
     end)
-    ConsoleLog("Оптимизация освещения и космического неба запущена.")
+    ConsoleLog("Оптимизация освещения и темно-мятного купола запущена.")
 end
 
 -- Камера стретч трюк
@@ -727,7 +710,15 @@ local function InitJumpDistanceRadius()
 
         local points = {}
         local rayparams = RaycastParams.new()
-        rayparams.FilterDescendantsInstances = {char}
+
+        -- Исключаем игрока, все силуэты и призрачные клоны из просчета прыжка!
+        local exclusionList = {char}
+        for _, obj in ipairs(workspace:GetChildren()) do
+            if obj.Name == "ServerGhostModel_Client" or obj.Name:find("ServerGhost") then
+                table.insert(exclusionList, obj)
+            end
+        end
+        rayparams.FilterDescendantsInstances = exclusionList
         rayparams.FilterType = Enum.RaycastFilterType.Exclude
 
         for i = 1, numSegments do
@@ -779,7 +770,6 @@ local function InitAvatarModifications()
             end)
         end
 
-        -- Делаем ВСЕ части персонажа прозрачными
         for _, obj in ipairs(char:GetDescendants()) do
             MakeTransparent(obj)
         end
@@ -1073,7 +1063,6 @@ local function InitSmartGlow()
         local info = TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
         TweenService:Create(box, info, {Transparency = 0.4, SurfaceTransparency = 0.98}):Play()
 
-        -- Интегрируем динамический переключатель ESP в рендерер
         local activeCheck = RunService.Heartbeat:Connect(function()
             if box and box.Parent then
                 box.Visible = Settings.SmartGlow.Enabled
@@ -1137,7 +1126,7 @@ local function InitServerGhost()
         local hrp = char:FindFirstChild("HumanoidRootPart")
         if not hum or not hrp then return end
 
-        -- ЕДИНЫЙ КРАСИВЫЙ СИЛУЭТ (Дублируем реального персонажа)
+        -- ЕДИНЫЙ КРАСИВЫЙ СИЛУЭТ
         local ghostModel = Instance.new("Model")
         ghostModel.Name = "ServerGhostModel_Client"
         ghostModel.Parent = workspace
@@ -1160,12 +1149,10 @@ local function InitServerGhost()
                 g.Anchored = true
                 g.CanCollide = false
                 g.CastShadow = false
-                -- Эффектный футуристический полупрозрачный неон!
                 g.Material = Enum.Material.ForceField
                 g.Color = Color3.fromRGB(0, 255, 200)
                 g.Transparency = 0.5
                 g.Parent = ghostModel
-                -- Удаляем скрипты и констрейнты из клона
                 for _, sub in ipairs(g:GetDescendants()) do
                     if not sub:IsA("SpecialMesh") then
                         sub:Destroy()
@@ -1273,7 +1260,6 @@ local function InitServerGhost()
                             table.insert(trailParts, tPart)
                         end
 
-                        -- Плавное увядание силуэта
                         for alpha = 0.7, 1.0, 0.05 do
                             for _, p in ipairs(trailParts) do
                                 p.Transparency = alpha
@@ -1311,7 +1297,7 @@ local function InitTargetESP()
     targetImg.Size = UDim2.new(0, 70, 0, 70)
     targetImg.AnchorPoint = Vector2.new(0.5, 0.5)
     targetImg.BackgroundTransparency = 1
-    targetImg.Image = targetAsset -- Кэшированная премиум SVG текстура!
+    targetImg.Image = targetAssetSvg -- Изначально предустановленный SVG
     targetImg.ImageColor3 = Color3.fromRGB(0, 255, 200)
     targetImg.ImageTransparency = 1.0
     targetImg.Visible = false
@@ -1333,36 +1319,19 @@ local function InitTargetESP()
 
         for _, other in ipairs(Players:GetPlayers()) do
             if other ~= player and other.Character then
-                local head = other.Character:FindFirstChild("Head")
+                -- Прикрепляем строго к торсу (HumanoidRootPart) для устранения дрожания и смещения
+                local root = other.Character:FindFirstChild("HumanoidRootPart")
                 local hum = other.Character:FindFirstChildOfClass("Humanoid")
-                if head and hum and hum.Health > 0 then
-                    local screenPos, onScreen = Camera:WorldToViewportPoint(head.Position)
+                if root and hum and hum.Health > 0 then
+                    local screenPos, onScreen = Camera:WorldToViewportPoint(root.Position)
                     if onScreen then
                         local screenPos2D = Vector2.new(screenPos.X, screenPos.Y)
                         local dist = (screenPos2D - screenCenterWithOffset).Magnitude
                         if dist < minDistance then
                             minDistance = dist
-                            closestPlayer = head
+                            closestPlayer = root
                         end
                     end
-                end
-            end
-        end
-
-        -- Векторный рейкаст если наведено в упор
-        if not closestPlayer then
-            local ray = Camera:ViewportPointToRay(screenCenterWithOffset.X, screenCenterWithOffset.Y)
-            local raycastParams = RaycastParams.new()
-            raycastParams.FilterDescendantsInstances = {player.Character}
-            raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-
-            local result = workspace:Raycast(ray.Origin, ray.Direction * Settings.TargetEsp.Range, raycastParams)
-            if result and result.Instance then
-                local model = result.Instance:FindFirstAncestorOfClass("Model")
-                local hum = model and model:FindFirstChildOfClass("Humanoid")
-                local head = model and model:FindFirstChild("Head")
-                if hum and head and hum.Health > 0 then
-                    closestPlayer = head
                 end
             end
         end
@@ -1376,7 +1345,15 @@ local function InitTargetESP()
             return
         end
 
-        tclock = tclock + dt * Settings.TargetEsp.RotSpeed * 4
+        -- Динамическая смена текстуры по выбору пользователя
+        if Settings.TargetEsp.TextureChoice == "mitetarget.svg" then
+            targetImg.Image = targetAssetSvg
+        else
+            targetImg.Image = targetAssetPng
+        end
+
+        -- Плавное вращение (контролируемая, сниженная скорость)
+        tclock = tclock + dt * Settings.TargetEsp.RotSpeed * 10
 
         local activeTarget = GetTarget()
         local shouldBeVisible = activeTarget ~= nil
@@ -1393,13 +1370,13 @@ local function InitTargetESP()
                 targetImg.Visible = true
                 targetImg.Position = UDim2.new(0, screenPos.X, 0, screenPos.Y)
 
+                -- Сглаживание размеров (Предотвращает бесконечное увеличение при сильном приближении)
                 local dist = (activeTarget.Position - Camera.CFrame.Position).Magnitude
-                local alpha = math.clamp(dist / Settings.TargetEsp.Range, 0, 1)
-                local targetScale = 3.6 * (1 - alpha) + 2.0 * alpha
+                local referenceScale = 30.0 / math.max(dist, 5.0)
+                -- Стабильные границы размера: от 45 до 120 пикселей независимо от зума!
+                local baseSize = math.clamp(referenceScale * 15, 45, 120)
 
-                currentScale = lerp2(currentScale, targetScale, dt * Settings.TargetEsp.SmoothScale)
-
-                targetImg.Size = UDim2.new(0, 70 * currentScale, 0, 70 * currentScale)
+                targetImg.Size = UDim2.new(0, baseSize, 0, baseSize)
                 targetImg.Rotation = tclock * Settings.TargetEsp.RotAngle
             else
                 targetImg.Visible = false
@@ -1409,7 +1386,7 @@ local function InitTargetESP()
         end
     end)
     SharedState.AddConnection(conn)
-    ConsoleLog("Таргет ESP модуль (наведение взглядом) успешно запущен.")
+    ConsoleLog("Таргет ESP модуль успешно запущен.")
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
@@ -1425,15 +1402,13 @@ local function InitAdvancedGyroscope()
     local lookActive = false
     local lastLookPosition = nil
 
-    -- Храним углы гироскопа, получаемые из DeviceRotationChanged напрямую
     local gyroPitch = 0
     local gyroYaw = 0
 
-    -- СВЯЗКА ТАЧА И ГИРОСКОПА (Не сбрасываем processed, чтобы пальцы работали одновременно!)
+    -- СВЯЗКА ТАЧА И ГИРОСКОПА
     local touchBegan = UserInputService.InputBegan:Connect(function(input, processed)
         if input.UserInputType == Enum.UserInputType.Touch then
             local vpSize = Camera.ViewportSize
-            -- Правая половина экрана отвечает за вращение
             if input.Position.X > vpSize.X / 2 then
                 lookActive = true
                 lastLookPosition = input.Position
@@ -1466,7 +1441,6 @@ local function InitAdvancedGyroscope()
     end)
     SharedState.AddConnection(touchEnded)
 
-    -- Чтение DeviceRotation через НАДЕЖНЫЙ Event Listener (не зависает в эмуляторах)
     local gyroConn = UserInputService.DeviceRotationChanged:Connect(function(rotation, translation)
         pcall(function()
             local rx, ry, rz = rotation:ToEulerAnglesXYZ()
@@ -1611,6 +1585,18 @@ VisualGroup:AddToggle("TargetEspToggle", {
     end
 })
 
+-- Выбор текстуры Target ESP через Dropdown
+VisualGroup:AddDropdown("TargetEspTextureDropdown", {
+    Values = {"mitetarget.svg", "1784850230697.png"},
+    Default = Settings.TargetEsp.TextureChoice,
+    Multi = false,
+    Text = "Текстура Target ESP",
+    Callback = function(v)
+        Settings.TargetEsp.TextureChoice = v
+        ConsoleLog("Выбрана текстура таргета: " .. v)
+    end
+})
+
 VisualGroup:AddInput("TargetFovInput", {
     Text = "Радиус захвата ESP FOV",
     Default = tostring(Settings.TargetEsp.FovRadius),
@@ -1724,15 +1710,15 @@ AvatarGroup:AddToggle("AuraToggle", {
     end
 })
 
-AvatarGroup:AddToggle("SpaceSkyboxToggle", {
-    Text = "Космический Скайбокс",
-    Default = Settings.Lighting.SpaceSkybox,
+AvatarGroup:AddToggle("SkyDomeToggle", {
+    Text = "Инвертированный Купол (Sky Dome)",
+    Default = Settings.Lighting.SkyDome,
     Callback = function(v)
-        Settings.Lighting.SpaceSkybox = v
+        Settings.Lighting.SkyDome = v
     end
 })
 
--- Настройки гироскопа
+-- Настройки гироскопа (ОТКЛЮЧЕН ПО УМОЛЧАНИЮ)
 GyroSettingsGroup:AddToggle("GyroToggle", {
     Text = "Включить Умный AAA-Гироскоп",
     Default = Settings.Gyroscope.Enabled,
