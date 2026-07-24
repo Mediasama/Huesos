@@ -3,6 +3,7 @@
     ║        OBSIDIAN PREMIUM SUITE: UNIFIED & OPTIMIZED       ║
     ║   Объединенный и улучшенный пакет скриптов (AIO)         ║
     ║   Стиль: Мятный Графит (Matted Mint - Overhaul Style)    ║
+    ║   Шрифт: Jura (Cyber-Futuristic Typography)              ║
     ║                                                          ║
     ║   Разработано под авто-выполнение и мобильные эмуляторы ║
     ╚══════════════════════════════════════════════════════════╝
@@ -20,7 +21,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
 
--- Вспомогательная функция lerp2 (объявлена в самом верху для безопасного вызова во всех модулях)
+-- Вспомогательная функция lerp (объявлена в самом верху для безопасного вызова во всех модулях)
 local function lerp2(a, b, t)
     return a + (b - a) * t
 end
@@ -87,6 +88,13 @@ function SharedState.Cleanup()
     -- Отключаем гироскопический рендер
     pcall(function() RunService:UnbindFromRenderStep("AIO_GyroCamera") end)
 
+    -- Очищаем добавленную атмосферу
+    pcall(function()
+        local Lighting = game:GetService("Lighting")
+        local customAtm = Lighting:FindFirstChild("CyberAtmosphere_Client")
+        if customAtm then customAtm:Destroy() end
+    end)
+
     SharedState.Connections = {}
     SharedState.Drawings = {}
     SharedState.Instances = {}
@@ -146,14 +154,14 @@ local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
 local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
 local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
 
--- Настройка мятного стиля по умолчанию (переопределяем ДО CreateWindow для 100% безопасности от "got string" крашей)
+-- Настройка Graphite-Mint стиля по умолчанию (переопределяем ДО CreateWindow для безопасности от "got string" крашей)
 pcall(function()
     local mintAccent = Color3.fromRGB(0, 255, 200) -- Тот самый яркий неоновый мятный цвет из Overhaul!
-    local darkAccent = Color3.fromRGB(0, 200, 150)
-    local bgDark = Color3.fromRGB(20, 20, 25)
-    local borderDark = Color3.fromRGB(40, 40, 45)
+    local darkAccent = Color3.fromRGB(0, 180, 140)
+    local bgDark = Color3.fromRGB(24, 25, 28) -- Deep graphite background
+    local borderDark = Color3.fromRGB(38, 40, 44)
     local textWhite = Color3.fromRGB(255, 255, 255)
-    local textGray = Color3.fromRGB(180, 180, 180)
+    local textGray = Color3.fromRGB(160, 165, 175)
 
     Library.Theme = {
         AccentColor = mintAccent,
@@ -167,11 +175,13 @@ pcall(function()
         FontColor = textWhite,
     }
     Library.ColorScheme = Library.Theme
+    -- Переопределяем шрифт по умолчанию в библиотеке на Jura
+    Library.Font = Enum.Font.Jura
 end)
 
 local Window = Library:CreateWindow({
-    Title = "Obsidian Suite | Matted Mint",
-    Footer = "Разработано для авто-выполнения | v2.7",
+    Title = "Obsidian Suite | Jura Graphite",
+    Footer = "Разработано для авто-выполнения | v2.8",
     Icon = 95816097006870,
     NotifySide = "Right",
     ShowCustomCursor = false,
@@ -213,8 +223,9 @@ local Settings = {
         RemoveAtmosphere = true,
         ContrastPreserve = true,
         SpaceSkybox = false,
-        SkyDome = true, -- Инвертированный купол по умолчанию!
+        SkyDome = true, -- Инвертированный купол включен по умолчанию
         SkyDomeColor = Color3.fromRGB(10, 35, 28), -- Темно-мятный цвет
+        CyberAtmosphere = true, -- Мятная кибер-атмосфера
     },
     Comfort = {
         ZeroCamShake = true,
@@ -224,8 +235,8 @@ local Settings = {
     Crosshair = {
         Enabled = true,
         Size = 32,
-        Width = 80, -- Настраиваемая ширина по умолчанию
-        Height = 40, -- Настраиваемая высота по умолчанию
+        Width = 80, -- Настраиваемая ширина по умолчанию: 80
+        Height = 40, -- Настраиваемая высота по умолчанию: 40
         XOffset = 0,
         YOffset = -20,
     },
@@ -247,6 +258,7 @@ local Settings = {
     },
     ServerGhost = {
         Enabled = true,
+        RedConnection = true, -- Красная нить связи
     },
     TargetEsp = {
         Enabled = true,
@@ -254,13 +266,17 @@ local Settings = {
         SmoothFade = 12,
         SmoothScale = 10,
         RotAngle = 360,
-        RotSpeed = 0.15, -- Существенно снизили скорость вращения
-        VerticalOffset = 0,
+        RotSpeed = 0.15, -- Медленное комфортное вращение
+        XOffset = 0,
+        YOffset = 0, -- Выравнивается на уровне сердца/центра торса
+        Width = 70,
+        Height = 70,
         FovRadius = 80,
-        TextureChoice = "mitetarget.svg", -- Предустановленный выбор ("mitetarget.svg" или "1784850230697.png")
+        TextureChoice = "Picsart_26-07-24_04-21-33-626.png", -- По умолчанию Picsart
+        RotationalStyle = "Pendulum", -- Доступно: "Continuous", "Pendulum" (качели-балансир), "Static"
     },
     Gyroscope = {
-        Enabled = false, -- ОТКЛЮЧЕНО ПО УМОЛЧАНИЮ
+        Enabled = false, -- ОТКЛЮЧЕНО ПО УМОЛЧАНИЮ КАК ЗАКАЗАНО
         PitchSensitivity = 1.5,
         YawSensitivity = 1.8,
         Deadzone = 0.001,
@@ -298,6 +314,7 @@ end
 
 -- Кэшируем кастомные текстуры
 local crosshairAsset = GetCustomTexture("img_0_pk.png", "https://raw.githubusercontent.com/Mediasama/Huesos/main/img_0_pk.png")
+local targetAssetPicsart = GetCustomTexture("Picsart_26-07-24_04-21-33-626.png", "https://raw.githubusercontent.com/Mediasama/Huesos/main/Picsart_26-07-24_04-21-33-626.png")
 local targetAssetSvg = GetCustomTexture("mitetarget.svg", "https://raw.githubusercontent.com/Mediasama/Huesos/main/mitetarget.svg")
 local targetAssetPng = GetCustomTexture("1784850230697.png", "https://raw.githubusercontent.com/Mediasama/Huesos/main/1784850230697.png")
 
@@ -495,7 +512,7 @@ local function InitOptimizerAndLighting()
             end
             if Settings.Lighting.RemoveAtmosphere then
                 for _, obj in ipairs(Lighting:GetChildren()) do
-                    if obj:IsA("Atmosphere") or obj:IsA("Clouds") then
+                    if (obj:IsA("Atmosphere") or obj:IsA("Clouds")) and obj.Name ~= "CyberAtmosphere_Client" then
                         obj:Destroy()
                     end
                 end
@@ -508,7 +525,7 @@ local function InitOptimizerAndLighting()
                 if not dome then
                     dome = Instance.new("Part")
                     dome.Name = "SkyDome_Client"
-                    dome.Size = Vector3.new(2000, 2000, 2000)
+                    dome.Size = Vector3.new(2500, 2500, 2500)
                     dome.Anchored = true
                     dome.CanCollide = false
                     dome.CastShadow = false
@@ -519,9 +536,8 @@ local function InitOptimizerAndLighting()
 
                     local mesh = Instance.new("SpecialMesh")
                     mesh.MeshType = Enum.MeshType.FileMesh
-                    -- Инвертированная сфера с вывернутыми внутрь полигонами, которая закрывает весь игровой мир!
                     mesh.MeshId = "rbxassetid://4057161667"
-                    mesh.Scale = Vector3.new(2000, 2000, 2000)
+                    mesh.Scale = Vector3.new(2500, 2500, 2500)
                     mesh.Parent = dome
                 end
 
@@ -533,6 +549,25 @@ local function InitOptimizerAndLighting()
             else
                 local dome = workspace:FindFirstChild("SkyDome_Client")
                 if dome then dome:Destroy() end
+            end
+
+            -- КИБЕР МЯТНАЯ АТМОСФЕРА
+            if Settings.Lighting.CyberAtmosphere then
+                local atm = Lighting:FindFirstChild("CyberAtmosphere_Client")
+                if not atm then
+                    atm = Instance.new("Atmosphere")
+                    atm.Name = "CyberAtmosphere_Client"
+                    atm.Density = 0.35
+                    atm.Color = Color3.fromRGB(15, 45, 35) -- Cyber Mint Fog
+                    atm.Decay = Color3.fromRGB(10, 30, 24)
+                    atm.Glare = 0.1
+                    atm.Haze = 0.5
+                    atm.Parent = Lighting
+                    SharedState.AddInstance(atm)
+                end
+            else
+                local atm = Lighting:FindFirstChild("CyberAtmosphere_Client")
+                if atm then atm:Destroy() end
             end
         end)
     end
@@ -550,7 +585,7 @@ local function InitOptimizerAndLighting()
             ApplyLighting()
         end
     end)
-    ConsoleLog("Оптимизация освещения и темно-мятного купола запущена.")
+    ConsoleLog("Оптимизация освещения, кибер-купола и атмосферы запущена.")
 end
 
 -- Камера стретч трюк
@@ -1115,8 +1150,8 @@ local function InitSmartGlow()
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
--- ║      8. КРУТОЙ 3D НЕОНОВЫЙ СИЛУЭТ СЕРВЕРА (GHOST)        ║
--- ╚══════════════════════════════════════════════════════════╗
+-- ║      8. ЧИСТЫЙ СИЛУЭТ СЕРВЕРА (БЕЗ ОБВОДКИ) + КРАСНАЯ НИТЬ║
+-- ╚══════════════════════════════════════════════════════════╝
 local function InitServerGhost()
     local function setup()
         local char = player.Character
@@ -1126,21 +1161,13 @@ local function InitServerGhost()
         local hrp = char:FindFirstChild("HumanoidRootPart")
         if not hum or not hrp then return end
 
-        -- ЕДИНЫЙ КРАСИВЫЙ СИЛУЭТ
+        -- ЕДИНЫЙ КРАСИВЫЙ СИЛУЭТ СЕРВЕРА
         local ghostModel = Instance.new("Model")
         ghostModel.Name = "ServerGhostModel_Client"
         ghostModel.Parent = workspace
         SharedState.AddInstance(ghostModel)
 
-        -- Тонкий мятный SelectionBox поверх гуманоида
-        local mainBox = Instance.new("SelectionBox")
-        mainBox.Adornee = ghostModel
-        mainBox.LineThickness = 0.01
-        mainBox.Color3 = Color3.fromRGB(0, 255, 200)
-        mainBox.Parent = ghostModel
-        SharedState.AddInstance(mainBox)
-
-        -- Клонируем части тела для создания 3D Силуэта
+        -- Клонируем части тела для создания 3D Силуэта (Без SelectionBox и обводки!)
         local ghostParts = {}
         for _, obj in ipairs(char:GetChildren()) do
             if obj:IsA("BasePart") and obj.Name ~= "HumanoidRootPart" then
@@ -1162,6 +1189,15 @@ local function InitServerGhost()
             end
         end
 
+        -- Вспомогательная точка крепления для призрака
+        local ghostHrpPart = Instance.new("Part")
+        ghostHrpPart.Name = "HumanoidRootPart_ghost"
+        ghostHrpPart.Size = hrp.Size
+        ghostHrpPart.Anchored = true
+        ghostHrpPart.CanCollide = false
+        ghostHrpPart.Transparency = 1.0
+        ghostHrpPart.Parent = ghostModel
+
         local server_cf = hrp.CFrame
         local lin_vel = Vector3.new(0, 0, 0)
         local last = os.clock()
@@ -1169,12 +1205,40 @@ local function InitServerGhost()
         local frames = {}
         local trailTimer = 0
 
+        -- КРАСНАЯ СВЯЗУЮЩАЯ ЦЕПЬ-НИТЬ К НОГАМ (Связь между реальным игроком и его призраком)
+        local attachmentReal = Instance.new("Attachment")
+        attachmentReal.Position = Vector3.new(0, -3, 0) -- Строго на уровне ног
+        attachmentReal.Parent = hrp
+        SharedState.AddInstance(attachmentReal)
+
+        local attachmentGhost = Instance.new("Attachment")
+        attachmentGhost.Position = Vector3.new(0, -3, 0) -- К ногам призрака
+        attachmentGhost.Parent = ghostHrpPart
+        SharedState.AddInstance(attachmentGhost)
+
+        local connectionBeam = Instance.new("Beam")
+        connectionBeam.Name = "ServerPathChain_Client"
+        connectionBeam.Attachment0 = attachmentReal
+        connectionBeam.Attachment1 = attachmentGhost
+        connectionBeam.Color = ColorSequence.new(Color3.fromRGB(255, 0, 0)) -- Красная нить
+        connectionBeam.Width0 = 0.15
+        connectionBeam.Width1 = 0.15
+        connectionBeam.Texture = "rbxassetid://4507699473" -- Glowing neon/chain pattern
+        connectionBeam.TextureSpeed = 2.0
+        connectionBeam.FaceCamera = true
+        connectionBeam.LightEmission = 1.0
+        connectionBeam.LightInfluence = 0.0
+        connectionBeam.Parent = hrp
+        SharedState.AddInstance(connectionBeam)
+
         local hb = RunService.Heartbeat:Connect(function(dt)
             if not Settings.ServerGhost.Enabled then
                 ghostModel.Parent = nil
+                connectionBeam.Enabled = false
                 return
             else
                 ghostModel.Parent = workspace
+                connectionBeam.Enabled = Settings.ServerGhost.RedConnection
             end
 
             if not hrp or not hrp.Parent then
@@ -1220,6 +1284,9 @@ local function InitServerGhost()
             local pred_pos = f.pos + f.vel * td
             local pred_cf = CFrame.new(pred_pos) * (f.cf - f.cf.Position)
 
+            -- Движение вспомогательной точки
+            ghostHrpPart.CFrame = pred_cf
+
             -- Обновляем позиции 3D частей силуэта
             for name, data in pairs(ghostParts) do
                 local ghost = data.ghost
@@ -1233,10 +1300,10 @@ local function InitServerGhost()
                 local distToGhost = (Camera.CFrame.Position - pred_pos).Magnitude
                 if distToGhost < 2.5 then
                     for _, data in pairs(ghostParts) do data.ghost.Transparency = 1.0 end
-                    mainBox.Transparency = 1.0
+                    connectionBeam.Enabled = false
                 else
                     for _, data in pairs(ghostParts) do data.ghost.Transparency = 0.5 end
-                    mainBox.Transparency = 0.0
+                    connectionBeam.Enabled = Settings.ServerGhost.RedConnection
                 end
             end
 
@@ -1244,7 +1311,7 @@ local function InitServerGhost()
             trailTimer = trailTimer + dt
             if trailTimer >= 0.05 then
                 trailTimer = 0
-                if mainBox.Transparency < 0.99 then
+                if Camera and (Camera.CFrame.Position - pred_pos).Magnitude >= 2.5 then
                     task.spawn(function()
                         local trailParts = {}
                         local trailContainer = Instance.new("Model")
@@ -1277,7 +1344,7 @@ local function InitServerGhost()
     if player.Character then setup() end
     local conn = player.CharacterAdded:Connect(setup)
     SharedState.AddConnection(conn)
-    ConsoleLog("3D Силуэт сервера успешно запущен.")
+    ConsoleLog("3D Силуэт сервера и Красная Связующая Цепь успешно запущены.")
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
@@ -1294,10 +1361,10 @@ local function InitTargetESP()
     SharedState.AddInstance(targetGui)
 
     local targetImg = Instance.new("ImageLabel")
-    targetImg.Size = UDim2.new(0, 70, 0, 70)
+    targetImg.Size = UDim2.new(0, Settings.TargetEsp.Width, 0, Settings.TargetEsp.Height)
     targetImg.AnchorPoint = Vector2.new(0.5, 0.5)
     targetImg.BackgroundTransparency = 1
-    targetImg.Image = targetAssetSvg -- Изначально предустановленный SVG
+    targetImg.Image = targetAssetPicsart -- По умолчанию Picsart
     targetImg.ImageColor3 = Color3.fromRGB(0, 255, 200)
     targetImg.ImageTransparency = 1.0
     targetImg.Visible = false
@@ -1319,7 +1386,7 @@ local function InitTargetESP()
 
         for _, other in ipairs(Players:GetPlayers()) do
             if other ~= player and other.Character then
-                -- Прикрепляем строго к торсу (HumanoidRootPart) для устранения дрожания и смещения
+                -- Центрируем на торс (сердце игрока)
                 local root = other.Character:FindFirstChild("HumanoidRootPart")
                 local hum = other.Character:FindFirstChildOfClass("Humanoid")
                 if root and hum and hum.Health > 0 then
@@ -1345,15 +1412,26 @@ local function InitTargetESP()
             return
         end
 
-        -- Динамическая смена текстуры по выбору пользователя
-        if Settings.TargetEsp.TextureChoice == "mitetarget.svg" then
+        -- Выбор премиум текстуры
+        if Settings.TargetEsp.TextureChoice == "Picsart_26-07-24_04-21-33-626.png" then
+            targetImg.Image = targetAssetPicsart
+        elseif Settings.TargetEsp.TextureChoice == "mitetarget.svg" then
             targetImg.Image = targetAssetSvg
         else
             targetImg.Image = targetAssetPng
         end
 
-        -- Плавное вращение (контролируемая, сниженная скорость)
-        tclock = tclock + dt * Settings.TargetEsp.RotSpeed * 10
+        -- Математика вращения
+        if Settings.TargetEsp.RotationalStyle == "Continuous" then
+            tclock = tclock + dt * Settings.TargetEsp.RotSpeed * 10
+            targetImg.Rotation = tclock * Settings.TargetEsp.RotAngle
+        elseif Settings.TargetEsp.RotationalStyle == "Pendulum" then
+            -- Стиль качели-балансир: раскачивание синусоидой взад-вперед
+            tclock = tclock + dt * Settings.TargetEsp.RotSpeed * 8
+            targetImg.Rotation = math.sin(tclock) * 45 -- Размах качелей 45 градусов
+        else
+            targetImg.Rotation = 0 -- Static
+        end
 
         local activeTarget = GetTarget()
         local shouldBeVisible = activeTarget ~= nil
@@ -1363,21 +1441,24 @@ local function InitTargetESP()
         targetImg.ImageTransparency = currentTransparency
 
         if shouldBeVisible and targetImg.ImageTransparency < 0.99 then
-            local targetPos = activeTarget.Position + Vector3.new(0, Settings.TargetEsp.VerticalOffset, 0)
+            -- Центрируем строго на уровне сердца/торса с учетом кастомного Y оффсета
+            local targetPos = activeTarget.Position + Vector3.new(0, Settings.TargetEsp.YOffset, 0)
             local screenPos, onScreen = Camera:WorldToViewportPoint(targetPos)
 
             if onScreen then
                 targetImg.Visible = true
-                targetImg.Position = UDim2.new(0, screenPos.X, 0, screenPos.Y)
+                -- Накладываем кастомный XOffset на позицию экрана
+                targetImg.Position = UDim2.new(0, screenPos.X + Settings.TargetEsp.XOffset, 0, screenPos.Y)
 
-                -- Сглаживание размеров (Предотвращает бесконечное увеличение при сильном приближении)
+                -- Сглаживание размеров в зависимости от дистанции
                 local dist = (activeTarget.Position - Camera.CFrame.Position).Magnitude
                 local referenceScale = 30.0 / math.max(dist, 5.0)
-                -- Стабильные границы размера: от 45 до 120 пикселей независимо от зума!
-                local baseSize = math.clamp(referenceScale * 15, 45, 120)
 
-                targetImg.Size = UDim2.new(0, baseSize, 0, baseSize)
-                targetImg.Rotation = tclock * Settings.TargetEsp.RotAngle
+                -- Идеальные границы размеров метки: адаптированы под ширину и высоту
+                local baseW = math.clamp(referenceScale * Settings.TargetEsp.Width, 30, 150)
+                local baseH = math.clamp(referenceScale * Settings.TargetEsp.Height, 30, 150)
+
+                targetImg.Size = UDim2.new(0, baseW, 0, baseH)
             else
                 targetImg.Visible = false
             end
@@ -1391,7 +1472,7 @@ end
 
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  10. ПРЕМИАЛЬНЫЙ 1-ST/3-RD PERSON ГИРОСКОП               ║
--- ╚══════════════════════════════════════════════════════════╗
+-- ╚══════════════════════════════════════════════════════════╝
 local function InitAdvancedGyroscope()
     local currentZoom = 12
     local offsetPitch = 0  -- Touch offsets
@@ -1577,27 +1658,101 @@ VisualGroup:AddToggle("ServerGhostToggle", {
     end
 })
 
-VisualGroup:AddToggle("TargetEspToggle", {
-    Text = "Включить Target ESP (Авто-прицеливание)",
+VisualGroup:AddToggle("ServerGhostRedConnection", {
+    Text = "Связующая Красная Нить",
+    Default = Settings.ServerGhost.RedConnection,
+    Callback = function(v)
+        Settings.ServerGhost.RedConnection = v
+    end
+})
+
+-- Настройки Target ESP (Тонкая кастомизация)
+local TargetEspSection = Tabs.Universal:AddRightGroupbox("Кастомизация Target ESP", "eye")
+
+TargetEspSection:AddToggle("TargetEspToggle", {
+    Text = "Включить Target ESP",
     Default = Settings.TargetEsp.Enabled,
     Callback = function(v)
         Settings.TargetEsp.Enabled = v
     end
 })
 
--- Выбор текстуры Target ESP через Dropdown
-VisualGroup:AddDropdown("TargetEspTextureDropdown", {
-    Values = {"mitetarget.svg", "1784850230697.png"},
+TargetEspSection:AddDropdown("TargetEspTextureDropdown", {
+    Values = {"Picsart_26-07-24_04-21-33-626.png", "mitetarget.svg", "1784850230697.png"},
     Default = Settings.TargetEsp.TextureChoice,
     Multi = false,
-    Text = "Текстура Target ESP",
+    Text = "Метка Target ESP",
     Callback = function(v)
         Settings.TargetEsp.TextureChoice = v
-        ConsoleLog("Выбрана текстура таргета: " .. v)
     end
 })
 
-VisualGroup:AddInput("TargetFovInput", {
+TargetEspSection:AddDropdown("TargetEspRotStyleDropdown", {
+    Values = {"Continuous", "Pendulum", "Static"},
+    Default = Settings.TargetEsp.RotationalStyle,
+    Multi = false,
+    Text = "Стиль Вращения Метки",
+    Callback = function(v)
+        Settings.TargetEsp.RotationalStyle = v
+    end
+})
+
+TargetEspSection:AddInput("TargetEspWidthInput", {
+    Text = "Ширина Метки (Width)",
+    Default = tostring(Settings.TargetEsp.Width),
+    Numeric = true,
+    Finished = true,
+    Callback = function(v)
+        local num = tonumber(v)
+        if num then Settings.TargetEsp.Width = num end
+    end
+})
+
+TargetEspSection:AddInput("TargetEspHeightInput", {
+    Text = "Высота Метки (Height)",
+    Default = tostring(Settings.TargetEsp.Height),
+    Numeric = true,
+    Finished = true,
+    Callback = function(v)
+        local num = tonumber(v)
+        if num then Settings.TargetEsp.Height = num end
+    end
+})
+
+TargetEspSection:AddInput("TargetEspXOffsetInput", {
+    Text = "Смещение X (X Offset)",
+    Default = tostring(Settings.TargetEsp.XOffset),
+    Numeric = true,
+    Finished = true,
+    Callback = function(v)
+        local num = tonumber(v)
+        if num then Settings.TargetEsp.XOffset = num end
+    end
+})
+
+TargetEspSection:AddInput("TargetEspYOffsetInput", {
+    Text = "Смещение Y (Y Offset)",
+    Default = tostring(Settings.TargetEsp.YOffset),
+    Numeric = true,
+    Finished = true,
+    Callback = function(v)
+        local num = tonumber(v)
+        if num then Settings.TargetEsp.YOffset = num end
+    end
+})
+
+TargetEspSection:AddInput("TargetEspRotSpeedInput", {
+    Text = "Скорость Вращения (Speed)",
+    Default = tostring(Settings.TargetEsp.RotSpeed),
+    Numeric = true,
+    Finished = true,
+    Callback = function(v)
+        local num = tonumber(v)
+        if num then Settings.TargetEsp.RotSpeed = num end
+    end
+})
+
+TargetEspSection:AddInput("TargetFovInput", {
     Text = "Радиус захвата ESP FOV",
     Default = tostring(Settings.TargetEsp.FovRadius),
     Numeric = true,
@@ -1663,7 +1818,7 @@ CrosshairSection:AddInput("CrosshairYOffsetInput", {
     end
 })
 
--- Комфорт (Полностью убраны ПК бинды)
+-- Комфорт
 ComfortGroup:AddToggle("ZeroCamShakeToggle", {
     Text = "Zero Cam Shake (Без тряски)",
     Default = Settings.Comfort.ZeroCamShake,
@@ -1718,6 +1873,14 @@ AvatarGroup:AddToggle("SkyDomeToggle", {
     end
 })
 
+AvatarGroup:AddToggle("CyberAtmosphereToggle", {
+    Text = "Мятная Кибер-Атмосфера",
+    Default = Settings.Lighting.CyberAtmosphere,
+    Callback = function(v)
+        Settings.Lighting.CyberAtmosphere = v
+    end
+})
+
 -- Настройки гироскопа (ОТКЛЮЧЕН ПО УМОЛЧАНИЮ)
 GyroSettingsGroup:AddToggle("GyroToggle", {
     Text = "Включить Умный AAA-Гироскоп",
@@ -1761,7 +1924,7 @@ GyroSettingsGroup:AddInput("DeadzoneInput", {
 })
 
 -- Информационные параметры гироскопа
-GyroInfoGroup:AddLabel("Статус: Активен")
+GyroInfoGroup:AddLabel("Статус: Ожидание включения")
 GyroInfoGroup:AddLabel("Фильтрация шума: Event Driven Link")
 GyroInfoGroup:AddLabel("Ускорение: Динамическое нелинейное")
 
