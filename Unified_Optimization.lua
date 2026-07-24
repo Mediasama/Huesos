@@ -4,14 +4,7 @@
     ║   Объединенный и улучшенный пакет скриптов (AIO)         ║
     ║   Стиль: Мятный Графит (Matted Mint - Overhaul Style)    ║
     ║                                                          ║
-    ║   Особенности:                                           ║
-    ║   - Полная интеграция с Obsidian UI Library              ║
-    ║   - Перенесены универсалка.lua и console.lua             ║
-    ║   - 100% прозрачность персонажа + neon аура-сфера        ║
-    ║   - 5-столпный высокочувствительный мобильный гироскоп   ║
-    ║   - Текстурный прицел img_0_pk.png с fallback            ║
-    ║   - Полная защита от повторного запуска (без утечек)    ║
-    ║   - НИКАКИХ слайдеров и ПК биндов — для смартфонов!      ║
+    ║   Разработано под авто-выполнение и мобильные эмуляторы ║
     ╚══════════════════════════════════════════════════════════╝
 ]]
 
@@ -77,7 +70,7 @@ function SharedState.Cleanup()
     end
     -- Принудительно очищаем оставшиеся призраки в workspace
     for _, obj in ipairs(workspace:GetChildren()) do
-        if obj:IsA("Part") and obj.Name:find("_ghost$") then
+        if obj.Name == "ServerGhostModel_Client" or obj.Name:find("_ghost") then
             pcall(function() obj:Destroy() end)
         end
     end
@@ -93,6 +86,19 @@ function SharedState.Cleanup()
     pcall(function() if Camera then Camera.CameraType = Enum.CameraType.Custom end end)
     -- Отключаем гироскопический рендер
     pcall(function() RunService:UnbindFromRenderStep("AIO_GyroCamera") end)
+    -- Восстанавливаем оригинальный скайбокс
+    pcall(function()
+        local Lighting = game:GetService("Lighting")
+        local origSky = Lighting:FindFirstChild("OriginalSkyboxBackup")
+        if origSky then
+            for _, child in ipairs(Lighting:GetChildren()) do
+                if child:IsA("Sky") and child.Name ~= "OriginalSkyboxBackup" then
+                    child:Destroy()
+                end
+            end
+            origSky.Name = "Sky"
+        end
+    end)
 
     SharedState.Connections = {}
     SharedState.Drawings = {}
@@ -123,9 +129,6 @@ end
 -- Динамическое отслеживание смены Camera
 local camConnection = workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
     Camera = workspace.CurrentCamera or workspace:FindFirstChildOfClass("Camera")
-    if Settings and Settings.Gyroscope and Settings.Gyroscope.Enabled and Camera then
-        pcall(function() Camera.CameraType = Enum.CameraType.Scriptable end)
-    end
 end)
 SharedState.AddConnection(camConnection)
 
@@ -181,7 +184,7 @@ end)
 
 local Window = Library:CreateWindow({
     Title = "Obsidian Suite | Matted Mint",
-    Footer = "Разработано для авто-выполнения | v2.5",
+    Footer = "Разработано для авто-выполнения | v2.6",
     Icon = 95816097006870,
     NotifySide = "Right",
     ShowCustomCursor = false,
@@ -222,6 +225,7 @@ local Settings = {
         Fullbright = true,
         RemoveAtmosphere = true,
         ContrastPreserve = true,
+        SpaceSkybox = true,
     },
     Comfort = {
         ZeroCamShake = true,
@@ -230,7 +234,11 @@ local Settings = {
     },
     Crosshair = {
         Enabled = true,
-        VerticalOffset = -20,
+        Size = 32,
+        Width = 32,
+        Height = 32,
+        XOffset = 0,
+        YOffset = -20,
     },
     JumpRadius = {
         Enabled = true,
@@ -239,7 +247,7 @@ local Settings = {
     Character = {
         Transparent = true,
         Aura = true,
-        AuraColor = Color3.fromRGB(0, 255, 255),
+        AuraColor = Color3.fromRGB(0, 255, 200),
     },
     Prediction = {
         Enabled = true,
@@ -254,24 +262,54 @@ local Settings = {
     TargetEsp = {
         Enabled = true,
         Range = 100,
-        SmoothFade = 10,
-        SmoothScale = 8,
-        RotAngle = 40,
-        RotSpeed = 2,
-        VerticalOffset = 1.2,
+        SmoothFade = 12,
+        SmoothScale = 10,
+        RotAngle = 360,
+        RotSpeed = 1,
+        VerticalOffset = 0,
+        FovRadius = 80, -- Радиус зоны захвата вокруг прицела на экране (FOV lock)
     },
     Gyroscope = {
         Enabled = true,
-        PitchSensitivity = 1.2,
-        YawSensitivity = 1.5,
-        Deadzone = 0.005,
+        PitchSensitivity = 1.5,
+        YawSensitivity = 1.8,
+        Deadzone = 0.001,
         AlphaMin = 0.1,
-        AlphaMax = 0.9,
-        AlphaSpeedCoeff = 8.0,
-        AccelFactor = 1.5,
-        AccelLimit = 2.5,
     }
 }
+
+-- Вспомогательная функция для безопасного кэширования файлов с внешних ресурсов
+local function GetCustomTexture(fileName, fallbackUrl)
+    if isfile and readfile and writefile then
+        if isfile(fileName) then
+            local success, asset = pcall(function()
+                return getcustomasset(fileName)
+            end)
+            if success and asset then
+                return asset
+            end
+        end
+        -- Качаем и сохраняем на диск
+        ConsoleLog("Загрузка кастомного ресурса: " .. fileName)
+        local success, data = pcall(function()
+            return game:HttpGet(fallbackUrl)
+        end)
+        if success and data then
+            writefile(fileName, data)
+            local successAsset, asset = pcall(function()
+                return getcustomasset(fileName)
+            end)
+            if successAsset and asset then
+                return asset
+            end
+        end
+    end
+    return fallbackUrl
+end
+
+-- Кэшируем кастомные текстуры
+local crosshairAsset = GetCustomTexture("img_0_pk.png", "https://raw.githubusercontent.com/Mediasama/Huesos/main/img_0_pk.png")
+local targetAsset = GetCustomTexture("mitetarget.svg", "https://raw.githubusercontent.com/Mediasama/Huesos/main/img_0_pk.png") -- На случай отсутствия SVG, используем img_0_pk как красивый вращающийся спрайт
 
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║         1. МОДУЛЬ FFLAGS И ОПТИМИЗАЦИИ (PERFORMANCE)     ║
@@ -448,7 +486,7 @@ local function InitOptimizerAndLighting()
         SharedState.AddConnection(conn)
     end
 
-    -- Настройки света (Fullbright + Сохранение Контраста)
+    -- Настройки света (Fullbright + Сохранение Контраста + Скайбокс)
     local function ApplyLighting()
         pcall(function()
             local Lighting = game:GetService("Lighting")
@@ -458,7 +496,6 @@ local function InitOptimizerAndLighting()
                 Lighting.GlobalShadows = not Settings.Lighting.ContrastPreserve
 
                 if Settings.Lighting.ContrastPreserve then
-                    -- Мягкий рассеянный свет с сохранением глубины теней
                     Lighting.Ambient = Color3.fromRGB(130, 130, 140)
                     Lighting.OutdoorAmbient = Color3.fromRGB(150, 150, 160)
                 else
@@ -468,11 +505,51 @@ local function InitOptimizerAndLighting()
             end
             if Settings.Lighting.RemoveAtmosphere then
                 for _, obj in ipairs(Lighting:GetChildren()) do
-                    if obj:IsA("Atmosphere") or obj:IsA("Sky") or obj:IsA("Clouds") then
+                    if obj:IsA("Atmosphere") or obj:IsA("Clouds") then
                         obj:Destroy()
                     end
                 end
                 Lighting.FogEnd = 999999
+            end
+
+            -- Космический скайбокс
+            if Settings.Lighting.SpaceSkybox then
+                -- Резервное сохранение дефолтного
+                local existingSky = Lighting:FindFirstChildOfClass("Sky")
+                if existingSky and existingSky.Name ~= "SpaceSky" and not Lighting:FindFirstChild("OriginalSkyboxBackup") then
+                    existingSky.Name = "OriginalSkyboxBackup"
+                end
+
+                local spaceSky = Lighting:FindFirstChild("SpaceSky")
+                if not spaceSky then
+                    spaceSky = Instance.new("Sky")
+                    spaceSky.Name = "SpaceSky"
+                    spaceSky.SkyboxBk = "rbxassetid://120612190"
+                    spaceSky.SkyboxDn = "rbxassetid://120612133"
+                    spaceSky.SkyboxFt = "rbxassetid://120612217"
+                    spaceSky.SkyboxLf = "rbxassetid://120612260"
+                    spaceSky.SkyboxRt = "rbxassetid://120612297"
+                    spaceSky.SkyboxUp = "rbxassetid://120612330"
+                    spaceSky.StarCount = 3000
+                    spaceSky.Parent = Lighting
+                end
+
+                -- Деактивируем другие
+                for _, child in ipairs(Lighting:GetChildren()) do
+                    if child:IsA("Sky") and child.Name ~= "SpaceSky" then
+                        child.Parent = nil
+                    end
+                end
+                spaceSky.Parent = Lighting
+            else
+                local spaceSky = Lighting:FindFirstChild("SpaceSky")
+                if spaceSky then spaceSky.Parent = nil end
+
+                local origSky = Lighting:FindFirstChild("OriginalSkyboxBackup")
+                if origSky then
+                    origSky.Name = "Sky"
+                    origSky.Parent = Lighting
+                end
             end
         end)
     end
@@ -483,7 +560,14 @@ local function InitOptimizerAndLighting()
         ApplyLighting()
     end)
     SharedState.AddConnection(connL)
-    ConsoleLog("Оптимизация освещения и карты применена.")
+
+    -- Постоянный апдейт состояния света из настроек
+    task.spawn(function()
+        while task.wait(0.5) do
+            ApplyLighting()
+        end
+    end)
+    ConsoleLog("Оптимизация освещения и космического неба запущена.")
 end
 
 -- Камера стретч трюк
@@ -524,7 +608,6 @@ local function InitCameraComfort()
 
         if Settings.Comfort.ShiftLock then
             if hum then
-                -- Отключаем AutoRotate, чтобы физика гуманоида не спорила с нашим вращением!
                 hum.AutoRotate = false
             end
             if hrp then
@@ -546,51 +629,52 @@ local function InitCameraComfort()
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
--- ║         3. МОДУЛЬ ПРИЦЕЛА (IMG_0_PK.PNG С FALLBACK)      ║
+-- ║         3. МОДУЛЬ ПРИЦЕЛА (IMG_0_PK.PNG С RE-SENSING)    ║
 -- ╚══════════════════════════════════════════════════════════╝
 local function InitRaisedCrosshair()
-    if not Settings.Crosshair.Enabled then return end
-
     -- Попытка создать прицел на основе текстуры img_0_pk.png
     local crosshairImg
     local isCustom = false
 
     pcall(function()
         crosshairImg = CreateDrawing("Image")
-        if isfile and isfile("img_0_pk.png") and readfile then
-            crosshairImg.Data = readfile("img_0_pk.png")
-            isCustom = true
-        else
-            -- Загружаем резервный онлайн-прицел напрямую
-            crosshairImg.Data = game:HttpGet("https://raw.githubusercontent.com/Mediasama/Huesos/main/img_0_pk.png")
-            isCustom = true
-        end
-        crosshairImg.Size = Vector2.new(32, 32)
-        crosshairImg.Visible = true
+        crosshairImg.Data = game:HttpGet("https://raw.githubusercontent.com/Mediasama/Huesos/main/img_0_pk.png")
+        crosshairImg.Size = Vector2.new(Settings.Crosshair.Width, Settings.Crosshair.Height)
+        crosshairImg.Visible = false
+        isCustom = true
     end)
 
     -- Fallback на векторный прицел в мятном стиле, если рисование изображения не поддерживается
     local vectorLines = {}
     if not isCustom then
-        ConsoleLog("Текстура img_0_pk.png не поддерживается. Переключение на векторный fallback.")
         for i = 1, 4 do
             local line = CreateDrawing("Line")
             line.Color = Color3.fromRGB(0, 255, 200)
-            line.Thickness = 1.5
-            line.Visible = true
+            line.Thickness = 2.0
+            line.Visible = false
             table.insert(vectorLines, line)
         end
     end
 
     local conn = RunService.RenderStepped:Connect(function()
+        if not Settings.Crosshair.Enabled then
+            if crosshairImg then crosshairImg.Visible = false end
+            for _, l in ipairs(vectorLines) do l.Visible = false end
+            return
+        end
+
         local vpSize = Camera.ViewportSize
         local center = Vector2.new(vpSize.X / 2, vpSize.Y / 2)
-        local targetCenter = center + Vector2.new(0, Settings.Crosshair.VerticalOffset)
+        -- Точнейший оффсет, настраиваемый пользователем
+        local targetCenter = center + Vector2.new(Settings.Crosshair.XOffset, Settings.Crosshair.YOffset)
 
         if isCustom and crosshairImg then
-            crosshairImg.Position = targetCenter - Vector2.new(16, 16)
+            crosshairImg.Size = Vector2.new(Settings.Crosshair.Width, Settings.Crosshair.Height)
+            crosshairImg.Position = targetCenter - (crosshairImg.Size / 2)
+            crosshairImg.Visible = true
         elseif #vectorLines == 4 then
-            local size, gap = 8, 4
+            local size = Settings.Crosshair.Size or 12
+            local gap = 4
             vectorLines[1].From = targetCenter - Vector2.new(0, gap)
             vectorLines[1].To = targetCenter - Vector2.new(0, gap + size)
             vectorLines[2].From = targetCenter + Vector2.new(0, gap)
@@ -599,6 +683,8 @@ local function InitRaisedCrosshair()
             vectorLines[3].To = targetCenter - Vector2.new(gap + size, 0)
             vectorLines[4].From = targetCenter + Vector2.new(gap, 0)
             vectorLines[4].To = targetCenter + Vector2.new(gap + size, 0)
+
+            for _, l in ipairs(vectorLines) do l.Visible = true end
         end
     end)
     SharedState.AddConnection(conn)
@@ -608,8 +694,6 @@ end
 -- ║         4. МОДУЛЬ КРУГА ДИСТАНЦИИ ПРЫЖКА (JUMP RADIUS)   ║
 -- ╚══════════════════════════════════════════════════════════╝
 local function InitJumpDistanceRadius()
-    if not Settings.JumpRadius.Enabled then return end
-
     local lines = {}
     local numSegments = 32
     for i = 1, numSegments do
@@ -622,6 +706,11 @@ local function InitJumpDistanceRadius()
     end
 
     local conn = RunService.RenderStepped:Connect(function()
+        if not Settings.JumpRadius.Enabled then
+            for _, l in ipairs(lines) do l.Visible = false end
+            return
+        end
+
         local char = player.Character
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
         local hum = char and char:FindFirstChildOfClass("Humanoid")
@@ -679,12 +768,10 @@ local function InitAvatarModifications()
     local function ApplyTransparentAura(char)
         if not char then return end
 
-        -- Камера без коллизии стен
         pcall(function() player.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Invisicam end)
 
         local function MakeTransparent(obj)
             pcall(function()
-                -- Smart Glow ESP не должен подсвечивать наш светящийся шар ауры
                 if obj.Name == "AuraSphere_Client" or obj.Name:find("ghost") then return end
                 if obj:IsA("BasePart") or obj:IsA("Decal") then
                     obj.Transparency = Settings.Character.Transparent and 1.0 or 0.0
@@ -692,7 +779,7 @@ local function InitAvatarModifications()
             end)
         end
 
-        -- Делаем ВСЕ части персонажа полностью прозрачными (включая динамически загруженные аксессуары)
+        -- Делаем ВСЕ части персонажа прозрачными
         for _, obj in ipairs(char:GetDescendants()) do
             MakeTransparent(obj)
         end
@@ -700,14 +787,26 @@ local function InitAvatarModifications()
         local dynConn = char.DescendantAdded:Connect(MakeTransparent)
         SharedState.AddConnection(dynConn)
 
-        if not Settings.Character.Aura then return end
+        -- Постоянный контроль прозрачности
+        task.spawn(function()
+            while char and char.Parent do
+                for _, obj in ipairs(char:GetDescendants()) do
+                    if obj:IsA("BasePart") or obj:IsA("Decal") then
+                        if obj.Name ~= "AuraSphere_Client" and not obj.Name:find("ghost") then
+                            obj.Transparency = Settings.Character.Transparent and 1.0 or 0.0
+                        end
+                    end
+                end
+                task.wait(1)
+            end
+        end)
 
         local hrp = char:WaitForChild("HumanoidRootPart", 5)
         if hrp then
             local aura = Instance.new("Part")
             aura.Name = "AuraSphere_Client"
             aura.Shape = Enum.PartType.Ball
-            aura.Size = Vector3.new(3, 3, 3)
+            aura.Size = Vector3.new(3.5, 3.5, 3.5)
             aura.Material = Enum.Material.Neon
             aura.Color = Settings.Character.AuraColor
             aura.Transparency = 0.5
@@ -723,6 +822,10 @@ local function InitAvatarModifications()
             -- При сильном приближении и от первого лица скрываем шар ауры
             local camCheck = RunService.RenderStepped:Connect(function()
                 if Camera and aura and aura.Parent then
+                    if not Settings.Character.Aura then
+                        aura.Transparency = 1.0
+                        return
+                    end
                     local dist = (Camera.CFrame.Position - aura.Position).Magnitude
                     if dist < 2.5 then
                         aura.Transparency = 1.0
@@ -745,8 +848,6 @@ end
 -- ║         6. МОДУЛЬ ПРЕДСКАЗАНИЯ ДВИЖЕНИЯ (TRAJECTORY)     ║
 -- ╚══════════════════════════════════════════════════════════╝
 local function InitPrediction()
-    if not Settings.Prediction.Enabled then return end
-
     local lastlanding = nil
     local isairborne = false
     local lastmoveinput = Vector3.new(0, 0, 1)
@@ -757,21 +858,21 @@ local function InitPrediction()
     local preddot = CreateDrawing("Circle")
     preddot.Radius = 6
     preddot.Filled = true
-    preddot.Color = Settings.Prediction.PredictDotColor or Color3.fromRGB(0, 255, 255)
+    preddot.Color = Color3.fromRGB(0, 255, 200)
     preddot.Visible = false
     preddot.NumSides = 32
 
     local landdot = CreateDrawing("Circle")
     landdot.Radius = 12
     landdot.Filled = true
-    landdot.Color = Settings.Prediction.LandDotColor or Color3.fromRGB(255, 100, 100)
+    landdot.Color = Color3.fromRGB(255, 100, 100)
     landdot.Visible = false
     landdot.NumSides = 32
 
     local landoutline = CreateDrawing("Circle")
     landoutline.Radius = 18
     landoutline.Filled = false
-    landoutline.Color = Settings.Prediction.LandOutlineColor or Color3.fromRGB(255, 150, 150)
+    landoutline.Color = Color3.fromRGB(255, 150, 150)
     landoutline.Visible = false
     landoutline.Thickness = 2
     landoutline.NumSides = 32
@@ -779,7 +880,7 @@ local function InitPrediction()
     local velcurve = {}
     for i = 1, 8 do
         local line = CreateDrawing("Line")
-        line.Color = Settings.Prediction.VelocityColor or Color3.fromRGB(0, 255, 0)
+        line.Color = Color3.fromRGB(0, 255, 200)
         line.Thickness = 3
         line.Visible = false
         velcurve[i] = line
@@ -788,28 +889,11 @@ local function InitPrediction()
     local arclines = {}
     for i = 1, 29 do
         local line = CreateDrawing("Line")
-        line.Color = Settings.Prediction.TrajectoryColor or Color3.fromRGB(255, 240, 140)
+        line.Color = Color3.fromRGB(255, 240, 140)
         line.Thickness = 2
         line.Visible = false
         arclines[i] = line
     end
-
-    local prejumplines = {}
-    for i = 1, 29 do
-        local line = CreateDrawing("Line")
-        line.Color = Settings.Prediction.PreJumpColor or Color3.fromRGB(100, 200, 255)
-        line.Thickness = 2
-        line.Visible = false
-        line.Transparency = 0.7
-        prejumplines[i] = line
-    end
-
-    local prejumplanddot = CreateDrawing("Circle")
-    prejumplanddot.Radius = 10
-    prejumplanddot.Filled = true
-    prejumplanddot.Color = Settings.Prediction.PreJumpColor or Color3.fromRGB(100, 200, 255)
-    prejumplanddot.Visible = false
-    prejumplanddot.NumSides = 32
 
     local function predictpos(p0, v0, t)
         local grav = workspace.Gravity
@@ -869,6 +953,15 @@ local function InitPrediction()
     end
 
     local conn = RunService.RenderStepped:Connect(function(dt)
+        if not Settings.Prediction.Enabled then
+            preddot.Visible = false
+            landdot.Visible = false
+            landoutline.Visible = false
+            for i = 1, 8 do velcurve[i].Visible = false end
+            for i = 1, 29 do arclines[i].Visible = false end
+            return
+        end
+
         pulsetime = pulsetime + dt
         local char = player.Character
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
@@ -951,38 +1044,6 @@ local function InitPrediction()
             landdot.Visible = false
             landoutline.Visible = false
         end
-
-        if Settings.Prediction.PreJumpEnabled and not isairborne then
-            local walkspeed = hum.WalkSpeed or 16
-            local futurevel = lastmoveinput * walkspeed
-            local jumpvel = futurevel + Vector3.new(0, 50, 0)
-            local prejumppositions, prejumplanding = simulate(p0, jumpvel)
-
-            if #prejumppositions > 1 then
-                for i = 1, 29 do
-                    local idx1 = math.floor((i - 1) * (#prejumppositions - 1) / 29) + 1
-                    local idx2 = math.floor(i * (#prejumppositions - 1) / 29) + 1
-                    local s1, on1 = toscreen(prejumppositions[idx1])
-                    local s2, on2 = toscreen(prejumppositions[idx2])
-                    prejumplines[i].From = s1
-                    prejumplines[i].To = s2
-                    prejumplines[i].Visible = on1 and on2 and isvisible((prejumppositions[idx1] + prejumppositions[idx2]) * 0.5)
-                end
-            else
-                for i = 1, 29 do prejumplines[i].Visible = false end
-            end
-
-            if prejumplanding then
-                local preland2, prelandon = toscreen(prejumplanding)
-                prejumplanddot.Position = preland2
-                prejumplanddot.Visible = prelandon and isvisible(prejumplanding)
-            else
-                prejumplanddot.Visible = false
-            end
-        else
-            for i = 1, 29 do prejumplines[i].Visible = false end
-            prejumplanddot.Visible = false
-        end
     end)
     SharedState.AddConnection(conn)
     ConsoleLog("Модуль прогнозирования траектории запущен.")
@@ -992,7 +1053,6 @@ end
 -- ║         7. МОДУЛЬ ПОДСВЕТКИ SMART GLOW (ESP)             ║
 -- ╚══════════════════════════════════════════════════════════╗
 local function InitSmartGlow()
-    if not Settings.SmartGlow.Enabled then return end
     local processed = {}
 
     local function CreateVisual(target, color)
@@ -1012,12 +1072,19 @@ local function InitSmartGlow()
 
         local info = TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
         TweenService:Create(box, info, {Transparency = 0.4, SurfaceTransparency = 0.98}):Play()
+
+        -- Интегрируем динамический переключатель ESP в рендерер
+        local activeCheck = RunService.Heartbeat:Connect(function()
+            if box and box.Parent then
+                box.Visible = Settings.SmartGlow.Enabled
+            end
+        end)
+        SharedState.AddConnection(activeCheck)
     end
 
     local function Analyze(obj)
         if not obj then return end
-        -- Исключаем наш светящийся шар ауры и серверных призраков, чтобы они не выделялись боксами
-        if obj.Name == "AuraSphere_Client" or obj.Name:find("ghost") then return end
+        if obj.Name == "AuraSphere_Client" or obj.Name:find("ghost") or obj.Name:find("ServerGhost") then return end
 
         local name = obj.Name:lower()
         local isSuspicious = false
@@ -1059,18 +1126,9 @@ local function InitSmartGlow()
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
--- ║      8. МОДУЛЬ СЕРВЕРНОГО ПРИЗРАКА ПИНГА С TRAIL (GHOST) ║
--- ╚══════════════════════════════════════════════════════════╝
+-- ║      8. КРУТОЙ 3D НЕОНОВЫЙ СИЛУЭТ СЕРВЕРА (GHOST)        ║
+-- ╚══════════════════════════════════════════════════════════╗
 local function InitServerGhost()
-    if not Settings.ServerGhost.Enabled then return end
-
-    local part_names = {
-        "HumanoidRootPart","Head","Left Arm","Right Arm","Left Leg","Right Leg",
-        "LeftUpperArm","RightUpperArm","LeftLowerArm","RightLowerArm",
-        "LeftHand","RightHand","LeftUpperLeg","RightUpperLeg",
-        "LeftLowerLeg","RightLowerLeg","LeftFoot","RightFoot"
-    }
-
     local function setup()
         local char = player.Character
         if not char then return end
@@ -1079,31 +1137,41 @@ local function InitServerGhost()
         local hrp = char:FindFirstChild("HumanoidRootPart")
         if not hum or not hrp then return end
 
-        -- ЕДИНЫЙ БОКС НА ВСЁ ТЕЛО (Один общий SelectionBox вместо кучи раздельных на каждую руку/ногу)
+        -- ЕДИНЫЙ КРАСИВЫЙ СИЛУЭТ (Дублируем реального персонажа)
         local ghostModel = Instance.new("Model")
         ghostModel.Name = "ServerGhostModel_Client"
         ghostModel.Parent = workspace
         SharedState.AddInstance(ghostModel)
 
+        -- Тонкий мятный SelectionBox поверх гуманоида
         local mainBox = Instance.new("SelectionBox")
         mainBox.Adornee = ghostModel
-        mainBox.LineThickness = 0.02
-        mainBox.Color3 = Color3.fromRGB(0, 255, 200) -- Единый мятный неоновый бокс
+        mainBox.LineThickness = 0.01
+        mainBox.Color3 = Color3.fromRGB(0, 255, 200)
         mainBox.Parent = ghostModel
         SharedState.AddInstance(mainBox)
 
-        local parts = {}
-        for _, n in ipairs(part_names) do
-            local p = char:FindFirstChild(n)
-            if p and p:IsA("BasePart") then
-                local g = Instance.new("Part")
-                g.Name = p.Name .. "_ghost"
-                g.Size = p.Size
+        -- Клонируем части тела для создания 3D Силуэта
+        local ghostParts = {}
+        for _, obj in ipairs(char:GetChildren()) do
+            if obj:IsA("BasePart") and obj.Name ~= "HumanoidRootPart" then
+                local g = obj:Clone()
+                g.Name = obj.Name .. "_ghost"
                 g.Anchored = true
                 g.CanCollide = false
-                g.Transparency = 1.0 -- Скрываем сами меши, виден только единый SelectionBox модели!
+                g.CastShadow = false
+                -- Эффектный футуристический полупрозрачный неон!
+                g.Material = Enum.Material.ForceField
+                g.Color = Color3.fromRGB(0, 255, 200)
+                g.Transparency = 0.5
                 g.Parent = ghostModel
-                parts[n] = {real = p, ghost = g}
+                -- Удаляем скрипты и констрейнты из клона
+                for _, sub in ipairs(g:GetDescendants()) do
+                    if not sub:IsA("SpecialMesh") then
+                        sub:Destroy()
+                    end
+                end
+                ghostParts[obj.Name] = {real = obj, ghost = g}
             end
         end
 
@@ -1115,6 +1183,13 @@ local function InitServerGhost()
         local trailTimer = 0
 
         local hb = RunService.Heartbeat:Connect(function(dt)
+            if not Settings.ServerGhost.Enabled then
+                ghostModel.Parent = nil
+                return
+            else
+                ghostModel.Parent = workspace
+            end
+
             if not hrp or not hrp.Parent then
                 pcall(function() ghostModel:Destroy() end)
                 return
@@ -1139,9 +1214,9 @@ local function InitServerGhost()
             local hrp_cf = server_cf
             local hrp_pos = hrp_cf.Position
             local rel = {}
-            for n, data in pairs(parts) do
+            for name, data in pairs(ghostParts) do
                 if data.real and data.real.Parent then
-                    rel[n] = hrp_cf:ToObjectSpace(data.real.CFrame)
+                    rel[name] = hrp_cf:ToObjectSpace(data.real.CFrame)
                 end
             end
 
@@ -1158,51 +1233,54 @@ local function InitServerGhost()
             local pred_pos = f.pos + f.vel * td
             local pred_cf = CFrame.new(pred_pos) * (f.cf - f.cf.Position)
 
-            -- Позиционируем призрачные части тела
-            for n, data in pairs(parts) do
+            -- Обновляем позиции 3D частей силуэта
+            for name, data in pairs(ghostParts) do
                 local ghost = data.ghost
-                local r = f.rel[n]
+                local r = f.rel[name]
                 local tgt = r and pred_cf * r or (data.real and data.real.CFrame or ghost.CFrame)
                 ghost.CFrame = ghost.CFrame:Lerp(tgt, math.min(delta * 18, 1))
             end
 
-            -- Автоматическое скрытие призрака (100% прозрачность) при сильном приближении/от первого лица
+            -- Скрытие призрака при первом лице
             if Camera then
                 local distToGhost = (Camera.CFrame.Position - pred_pos).Magnitude
                 if distToGhost < 2.5 then
+                    for _, data in pairs(ghostParts) do data.ghost.Transparency = 1.0 end
                     mainBox.Transparency = 1.0
                 else
+                    for _, data in pairs(ghostParts) do data.ghost.Transparency = 0.5 end
                     mainBox.Transparency = 0.0
                 end
             end
 
-            -- СОЗДАНИЕ MOTION TRAIL ДЛЯ СИЛУЭТА СЕРВЕРА (Мягкие затухающие неоновые следы)
+            -- MOTION TRAIL (Мягкие затухающие неоновые следы)
             trailTimer = trailTimer + dt
             if trailTimer >= 0.05 then
                 trailTimer = 0
                 if mainBox.Transparency < 0.99 then
                     task.spawn(function()
-                        -- Создаем затухающий бокс в текущем положении призрачной модели
-                        local trailPart = Instance.new("Part")
-                        trailPart.Size = ghostModel:GetExtentsSize()
-                        trailPart.CFrame = pred_cf
-                        trailPart.Anchored = true
-                        trailPart.CanCollide = false
-                        trailPart.Transparency = 1
-                        trailPart.Parent = workspace
+                        local trailParts = {}
+                        local trailContainer = Instance.new("Model")
+                        trailContainer.Name = "ServerGhostTrail_Client"
+                        trailContainer.Parent = workspace
 
-                        local trailBox = Instance.new("SelectionBox")
-                        trailBox.Adornee = trailPart
-                        trailBox.LineThickness = 0.01
-                        trailBox.Color3 = Color3.fromRGB(0, 255, 200)
-                        trailBox.Parent = trailPart
+                        for name, data in pairs(ghostParts) do
+                            local tPart = data.ghost:Clone()
+                            tPart.Transparency = 0.7
+                            tPart.Material = Enum.Material.Neon
+                            tPart.Color = Color3.fromRGB(0, 255, 200)
+                            tPart.Parent = trailContainer
+                            table.insert(trailParts, tPart)
+                        end
 
-                        -- Плавное увядание следа (Fade out)
-                        for alpha = 0.8, 1.0, 0.05 do
-                            trailBox.Transparency = alpha
+                        -- Плавное увядание силуэта
+                        for alpha = 0.7, 1.0, 0.05 do
+                            for _, p in ipairs(trailParts) do
+                                p.Transparency = alpha
+                            end
                             task.wait(0.04)
                         end
-                        trailPart:Destroy()
+                        trailContainer:Destroy()
                     end)
                 end
             end
@@ -1213,31 +1291,28 @@ local function InitServerGhost()
     if player.Character then setup() end
     local conn = player.CharacterAdded:Connect(setup)
     SharedState.AddConnection(conn)
-    ConsoleLog("Серверный призрак пинга инициализирован с единым боксом и Motion Trail.")
+    ConsoleLog("3D Силуэт сервера успешно запущен.")
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║         9. МОДУЛЬ ТАРГЕТ СПРАЙТА (TARGET ESP)            ║
 -- ╚══════════════════════════════════════════════════════════╝
 local function InitTargetESP()
-    if not Settings.TargetEsp.Enabled then return end
-
     local guiParent = player:FindFirstChild("PlayerGui") or CoreGui
 
-    -- Создаем красивый ImageLabel для вращающегося таргета
     local targetGui = Instance.new("ScreenGui")
     targetGui.Name = "MiteTarget_Gui"
     targetGui.ResetOnSpawn = false
     targetGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    pcall(function() targetGui.Parent = guiParent end)
+    targetGui.Parent = guiParent
     SharedState.AddInstance(targetGui)
 
     local targetImg = Instance.new("ImageLabel")
-    targetImg.Size = UDim2.new(0, Settings.TargetEsp.Range, 0, Settings.TargetEsp.Range)
+    targetImg.Size = UDim2.new(0, 70, 0, 70)
     targetImg.AnchorPoint = Vector2.new(0.5, 0.5)
     targetImg.BackgroundTransparency = 1
-    targetImg.Image = "rbxassetid://133065276440430" -- Идеальная крутящаяся текстура круга таргета!
-    targetImg.ImageColor3 = Color3.fromRGB(0, 255, 200) -- Наш неоновый мятный цвет!
+    targetImg.Image = targetAsset -- Кэшированная премиум SVG текстура!
+    targetImg.ImageColor3 = Color3.fromRGB(0, 255, 200)
     targetImg.ImageTransparency = 1.0
     targetImg.Visible = false
     targetImg.Parent = targetGui
@@ -1247,29 +1322,61 @@ local function InitTargetESP()
     local currentScale = 1.0
     local tclock = 0.0
 
+    -- Умный поиск цели по экрану (FOV Lock наведение перекрестия)
     local function GetTarget()
         local vpSize = Camera.ViewportSize
         local center = Vector2.new(vpSize.X / 2, vpSize.Y / 2)
-        local ray = Camera:ViewportPointToRay(center.X, center.Y)
+        local screenCenterWithOffset = center + Vector2.new(Settings.Crosshair.XOffset, Settings.Crosshair.YOffset)
 
-        local raycastParams = RaycastParams.new()
-        raycastParams.FilterDescendantsInstances = {player.Character}
-        raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+        local closestPlayer = nil
+        local minDistance = Settings.TargetEsp.FovRadius
 
-        local result = workspace:Raycast(ray.Origin, ray.Direction * Settings.TargetEsp.Range, raycastParams)
-        if result and result.Instance then
-            local model = result.Instance:FindFirstAncestorOfClass("Model")
-            local hum = model and model:FindFirstChildOfClass("Humanoid")
-            local root = model and model:FindFirstChild("HumanoidRootPart")
-            if hum and root and hum.Health > 0 then
-                return root
+        for _, other in ipairs(Players:GetPlayers()) do
+            if other ~= player and other.Character then
+                local head = other.Character:FindFirstChild("Head")
+                local hum = other.Character:FindFirstChildOfClass("Humanoid")
+                if head and hum and hum.Health > 0 then
+                    local screenPos, onScreen = Camera:WorldToViewportPoint(head.Position)
+                    if onScreen then
+                        local screenPos2D = Vector2.new(screenPos.X, screenPos.Y)
+                        local dist = (screenPos2D - screenCenterWithOffset).Magnitude
+                        if dist < minDistance then
+                            minDistance = dist
+                            closestPlayer = head
+                        end
+                    end
+                end
             end
         end
-        return nil
+
+        -- Векторный рейкаст если наведено в упор
+        if not closestPlayer then
+            local ray = Camera:ViewportPointToRay(screenCenterWithOffset.X, screenCenterWithOffset.Y)
+            local raycastParams = RaycastParams.new()
+            raycastParams.FilterDescendantsInstances = {player.Character}
+            raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+
+            local result = workspace:Raycast(ray.Origin, ray.Direction * Settings.TargetEsp.Range, raycastParams)
+            if result and result.Instance then
+                local model = result.Instance:FindFirstAncestorOfClass("Model")
+                local hum = model and model:FindFirstChildOfClass("Humanoid")
+                local head = model and model:FindFirstChild("Head")
+                if hum and head and hum.Health > 0 then
+                    closestPlayer = head
+                end
+            end
+        end
+
+        return closestPlayer
     end
 
     local conn = RunService.RenderStepped:Connect(function(dt)
-        tclock = tclock + dt * Settings.TargetEsp.RotSpeed
+        if not Settings.TargetEsp.Enabled then
+            targetImg.Visible = false
+            return
+        end
+
+        tclock = tclock + dt * Settings.TargetEsp.RotSpeed * 4
 
         local activeTarget = GetTarget()
         local shouldBeVisible = activeTarget ~= nil
@@ -1288,12 +1395,12 @@ local function InitTargetESP()
 
                 local dist = (activeTarget.Position - Camera.CFrame.Position).Magnitude
                 local alpha = math.clamp(dist / Settings.TargetEsp.Range, 0, 1)
-                local targetScale = 3.6 * (1 - alpha) + 2.6 * alpha
+                local targetScale = 3.6 * (1 - alpha) + 2.0 * alpha
 
                 currentScale = lerp2(currentScale, targetScale, dt * Settings.TargetEsp.SmoothScale)
 
                 targetImg.Size = UDim2.new(0, 70 * currentScale, 0, 70 * currentScale)
-                targetImg.Rotation = math.sin(tclock) * Settings.TargetEsp.RotAngle
+                targetImg.Rotation = tclock * Settings.TargetEsp.RotAngle
             else
                 targetImg.Visible = false
             end
@@ -1306,18 +1413,9 @@ local function InitTargetESP()
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
--- ║  10. ПРЕМИАЛЬНЫЙ 1-ST/3-RD PERSON ГИРОСКОП (НЕ КОНФЛИКТУЕТ)║
--- ╚══════════════════════════════════════════════════════════╝
+-- ║  10. ПРЕМИАЛЬНЫЙ 1-ST/3-RD PERSON ГИРОСКОП               ║
+-- ╚══════════════════════════════════════════════════════════╗
 local function InitAdvancedGyroscope()
-    if not Settings.Gyroscope.Enabled then return end
-
-    pcall(function() UserInputService.GyroscopeEnabled = true end)
-
-    -- Переключаем камеру в Scriptable режим, чтобы получить ПОЛНЫЙ контроль над CFrame (не конфликтует с Roblox-логикой!)
-    if Camera then
-        pcall(function() Camera.CameraType = Enum.CameraType.Scriptable end)
-    end
-
     local currentZoom = 12
     local offsetPitch = 0  -- Touch offsets
     local offsetYaw = 0
@@ -1326,13 +1424,16 @@ local function InitAdvancedGyroscope()
 
     local lookActive = false
     local lastLookPosition = nil
-    local prevDevRot = nil
 
-    -- Отслеживание Touch (тачпад поворота на правой половине экрана)
+    -- Храним углы гироскопа, получаемые из DeviceRotationChanged напрямую
+    local gyroPitch = 0
+    local gyroYaw = 0
+
+    -- СВЯЗКА ТАЧА И ГИРОСКОПА (Не сбрасываем processed, чтобы пальцы работали одновременно!)
     local touchBegan = UserInputService.InputBegan:Connect(function(input, processed)
-        if processed then return end
         if input.UserInputType == Enum.UserInputType.Touch then
             local vpSize = Camera.ViewportSize
+            -- Правая половина экрана отвечает за вращение
             if input.Position.X > vpSize.X / 2 then
                 lookActive = true
                 lastLookPosition = input.Position
@@ -1342,21 +1443,16 @@ local function InitAdvancedGyroscope()
     SharedState.AddConnection(touchBegan)
 
     local touchChanged = UserInputService.InputChanged:Connect(function(input, processed)
-        if processed then return end
         if input.UserInputType == Enum.UserInputType.Touch and lookActive and lastLookPosition then
             local delta = input.Position - lastLookPosition
-            local sensitivity = 0.004 -- Идеальный сенсор под пальцы
+            local sensitivity = 0.005
 
             local deltaYaw = -delta.X * sensitivity
-            local deltaPitch = -delta.Y * sensitivity -- Свайп вверх = смотрим вверх (интуитивно!)
+            local deltaPitch = -delta.Y * sensitivity
 
-            if UserInputService.GyroscopeEnabled then
-                offsetYaw = offsetYaw + deltaYaw
-                offsetPitch = offsetPitch + deltaPitch
-            else
-                currentYaw = currentYaw + deltaYaw
-                currentPitch = currentPitch + deltaPitch
-            end
+            offsetYaw = offsetYaw + deltaYaw
+            offsetPitch = offsetPitch + deltaPitch
+
             lastLookPosition = input.Position
         end
     end)
@@ -1370,7 +1466,17 @@ local function InitAdvancedGyroscope()
     end)
     SharedState.AddConnection(touchEnded)
 
-    -- Поддержка изменения Zoom мыши
+    -- Чтение DeviceRotation через НАДЕЖНЫЙ Event Listener (не зависает в эмуляторах)
+    local gyroConn = UserInputService.DeviceRotationChanged:Connect(function(rotation, translation)
+        pcall(function()
+            local rx, ry, rz = rotation:ToEulerAnglesXYZ()
+            gyroPitch = rx * Settings.Gyroscope.PitchSensitivity
+            gyroYaw = ry * Settings.Gyroscope.YawSensitivity
+        end)
+    end)
+    SharedState.AddConnection(gyroConn)
+
+    -- Zoom Камеры
     local wheelConn = UserInputService.InputChanged:Connect(function(input, processed)
         if input.UserInputType == Enum.UserInputType.MouseWheel then
             currentZoom = math.clamp(currentZoom - input.Position.Z * 2.0, 0.5, 40)
@@ -1378,11 +1484,8 @@ local function InitAdvancedGyroscope()
     end)
     SharedState.AddConnection(wheelConn)
 
-    -- Поддержка изменения Zoom тач-пинчем
     local pinchConn = UserInputService.TouchPinch:Connect(function(touchPositions, scale, velocity, state, processed)
-        if not processed then
-            currentZoom = math.clamp(currentZoom / scale, 0.5, 40)
-        end
+        currentZoom = math.clamp(currentZoom / scale, 0.5, 40)
     end)
     SharedState.AddConnection(pinchConn)
 
@@ -1394,6 +1497,13 @@ local function InitAdvancedGyroscope()
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
         if not char or not head or not hrp then return end
 
+        if not Settings.Gyroscope.Enabled then
+            pcall(function() Camera.CameraType = Enum.CameraType.Custom end)
+            return
+        else
+            pcall(function() Camera.CameraType = Enum.CameraType.Scriptable end)
+        end
+
         -- Всегда принудительно скрываем меши от первого лица
         if currentZoom < 2.5 then
             for _, p in pairs(char:GetDescendants()) do
@@ -1403,42 +1513,20 @@ local function InitAdvancedGyroscope()
             end
         end
 
-        local finalPitch, finalYaw
-        local successCFrame, devRot, sensorType = pcall(function() return UserInputService:GetDeviceRotation() end)
-
-        if successCFrame and devRot then
-            if prevDevRot then
-                local deltaRot = prevDevRot:Inverse() * devRot
-                local dx, dy, dz = deltaRot:ToEulerAnglesXYZ()
-
-                if math.abs(dx) > Settings.Gyroscope.Deadzone then
-                    offsetPitch = offsetPitch - dx * Settings.Gyroscope.PitchSensitivity
-                end
-                if math.abs(dy) > Settings.Gyroscope.Deadzone then
-                    offsetYaw = offsetYaw - dy * Settings.Gyroscope.YawSensitivity
-                end
-            end
-            prevDevRot = devRot
-            finalPitch = offsetPitch
-            finalYaw = offsetYaw
-        else
-            -- Fallback без гироскопа (чистый палец)
-            finalPitch = currentPitch
-            finalYaw = currentYaw
-        end
+        -- Суммируем свайп и гироскоп
+        local finalPitch = offsetPitch + gyroPitch
+        local finalYaw = offsetYaw + gyroYaw
 
         -- Clamping pitch (X axis) to prevent flipping upside down
         finalPitch = math.clamp(finalPitch, -math.rad(80), math.rad(80))
 
-        -- Позиционирование камеры (поддерживает 1st/3rd Person орбиту)
+        -- Позиционирование камеры
         local camPos = head.Position
         local targetRotation = CFrame.fromOrientation(finalPitch, finalYaw, 0)
 
         if currentZoom < 2.5 then
-            -- 1st Person
             Camera.CFrame = CFrame.new(camPos) * targetRotation
         else
-            -- 3rd Person орбита вокруг персонажа
             Camera.CFrame = CFrame.new(camPos) * targetRotation * CFrame.new(0, 0, currentZoom)
         end
 
@@ -1468,7 +1556,6 @@ OptGroup:AddToggle("MapOptimizeToggle", {
     end
 })
 
--- Никаких слайдеров! Заменяем Slider на Inputs (Текстовые поля) для мобильного удобства
 OptGroup:AddInput("StretchInput", {
     Text = "Растяжение Камеры (0.4 - 1.0)",
     Default = tostring(Settings.Performance.StretchedResolution),
@@ -1509,7 +1596,7 @@ VisualGroup:AddToggle("JumpCircleToggle", {
 })
 
 VisualGroup:AddToggle("ServerGhostToggle", {
-    Text = "Серверный призрак пинга",
+    Text = "Серверный 3D Силуэт (Неон)",
     Default = Settings.ServerGhost.Enabled,
     Callback = function(v)
         Settings.ServerGhost.Enabled = v
@@ -1521,6 +1608,72 @@ VisualGroup:AddToggle("TargetEspToggle", {
     Default = Settings.TargetEsp.Enabled,
     Callback = function(v)
         Settings.TargetEsp.Enabled = v
+    end
+})
+
+VisualGroup:AddInput("TargetFovInput", {
+    Text = "Радиус захвата ESP FOV",
+    Default = tostring(Settings.TargetEsp.FovRadius),
+    Numeric = true,
+    Finished = true,
+    Callback = function(v)
+        local num = tonumber(v)
+        if num then Settings.TargetEsp.FovRadius = num end
+    end
+})
+
+-- Настройки прицела (Crosshair Control)
+local CrosshairSection = Tabs.Universal:AddLeftGroupbox("Настройки Прицела", "eye")
+
+CrosshairSection:AddToggle("CrosshairEnabled", {
+    Text = "Включить Прицел",
+    Default = Settings.Crosshair.Enabled,
+    Callback = function(v)
+        Settings.Crosshair.Enabled = v
+    end
+})
+
+CrosshairSection:AddInput("CrosshairWidthInput", {
+    Text = "Ширина Прицела (Width)",
+    Default = tostring(Settings.Crosshair.Width),
+    Numeric = true,
+    Finished = true,
+    Callback = function(v)
+        local num = tonumber(v)
+        if num then Settings.Crosshair.Width = num end
+    end
+})
+
+CrosshairSection:AddInput("CrosshairHeightInput", {
+    Text = "Высота Прицела (Height)",
+    Default = tostring(Settings.Crosshair.Height),
+    Numeric = true,
+    Finished = true,
+    Callback = function(v)
+        local num = tonumber(v)
+        if num then Settings.Crosshair.Height = num end
+    end
+})
+
+CrosshairSection:AddInput("CrosshairXOffsetInput", {
+    Text = "Смещение X (X Offset)",
+    Default = tostring(Settings.Crosshair.XOffset),
+    Numeric = true,
+    Finished = true,
+    Callback = function(v)
+        local num = tonumber(v)
+        if num then Settings.Crosshair.XOffset = num end
+    end
+})
+
+CrosshairSection:AddInput("CrosshairYOffsetInput", {
+    Text = "Смещение Y (Y Offset)",
+    Default = tostring(Settings.Crosshair.YOffset),
+    Numeric = true,
+    Finished = true,
+    Callback = function(v)
+        local num = tonumber(v)
+        if num then Settings.Crosshair.YOffset = num end
     end
 })
 
@@ -1560,14 +1713,6 @@ AvatarGroup:AddToggle("TransparentToggle", {
     Default = Settings.Character.Transparent,
     Callback = function(v)
         Settings.Character.Transparent = v
-        local char = player.Character
-        if char then
-            for _, obj in ipairs(char:GetDescendants()) do
-                if obj:IsA("BasePart") or obj:IsA("Decal") then
-                    obj.Transparency = v and 1.0 or 0.0
-                end
-            end
-        end
     end
 })
 
@@ -1579,7 +1724,15 @@ AvatarGroup:AddToggle("AuraToggle", {
     end
 })
 
--- Настройки гироскопа (Полностью без ПК биндов, с инпутами)
+AvatarGroup:AddToggle("SpaceSkyboxToggle", {
+    Text = "Космический Скайбокс",
+    Default = Settings.Lighting.SpaceSkybox,
+    Callback = function(v)
+        Settings.Lighting.SpaceSkybox = v
+    end
+})
+
+-- Настройки гироскопа
 GyroSettingsGroup:AddToggle("GyroToggle", {
     Text = "Включить Умный AAA-Гироскоп",
     Default = Settings.Gyroscope.Enabled,
@@ -1623,10 +1776,10 @@ GyroSettingsGroup:AddInput("DeadzoneInput", {
 
 -- Информационные параметры гироскопа
 GyroInfoGroup:AddLabel("Статус: Активен")
-GyroInfoGroup:AddLabel("Фильтрация шума: EMA Low-Pass")
+GyroInfoGroup:AddLabel("Фильтрация шума: Event Driven Link")
 GyroInfoGroup:AddLabel("Ускорение: Динамическое нелинейное")
 
--- Консоль вывода логов (console.lua) - Использование ПРАВИЛЬНОЙ сигнатуры AddLabel(text, doesWrap)
+-- Консоль вывода логов
 local ConsoleBox = ConsoleGroup:AddLabel("Ожидание запуска логов...\n", true)
 getgenv().ObsidianConsoleLabel = ConsoleBox
 
